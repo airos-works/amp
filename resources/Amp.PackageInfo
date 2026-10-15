@@ -1,5 +1,5 @@
 name amp
-version 0.3.4~alpha-1
+version 0.3.5~alpha-1
 architecture x86_64
 summary "Music player for local libraries and Music Assistant, styled after iTunes 8"
 description "Amp plays MP3, MP4/AAC, FLAC, WAV and OGG files from local folders and streams tracks from a Music Assistant server, registering itself as a Sendspin player. It reads tags with TagLib, caches album and artist artwork from embedded pictures, folder art, MusicBrainz/Cover Art Archive, TheAudioDB and Discogs, offers album, artist and playlist browsing with playlists that can be mirrored to Music Assistant, and writes playlists and albums to a MiniDisc through a NetMD recorder."
@@ -9,8 +9,8 @@ urls { "https://github.com/jmgasper/amp" }
 copyrights { "2026 Amp contributors" "2013-2025 Niels Lohmann" "2024 Fonticons, Inc." }
 licenses { "MIT" "SIL OFL 1.1" "CC BY 4.0" }
 provides {
-    amp = 0.3.4~alpha
-    app:Amp = 0.3.4~alpha
+    amp = 0.3.5~alpha
+    app:Amp = 0.3.5~alpha
 }
 requires {
     haiku >= r1~beta6

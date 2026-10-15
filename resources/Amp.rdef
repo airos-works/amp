@@ -9,10 +9,10 @@ resource(202, "minidisc-glyph") #'PNG ' import "images/minidisc-glyph.png";
 resource app_version {
     major = 0,
     middle = 3,
-    minor = 3,
+    minor = 5,
     variety = B_APPV_ALPHA,
     internal = 0,
-    short_info = "Amp 0.3.4 alpha — music player",
+    short_info = "Amp 0.3.5 alpha — music player",
     long_info = "A native Haiku music player for local libraries and Music Assistant, styled after iTunes 8."
 };
 resource file_types message {
