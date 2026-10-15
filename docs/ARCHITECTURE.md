@@ -30,6 +30,9 @@ src/player   Haiku Media Kit
   NetMDUsb           USB Kit transport and roster for NetMD recorders
   MiniDiscPcm        any local file -> 44.1 kHz 16-bit big-endian PCM for SP recording
   MiniDisc           MiniDiscManager: recorder state, write and erase jobs on one worker thread
+src/quicklook  air/OS Quick Look add-on (add-ons/quick_look/Amp): LocalDecoder + AudioOutput +
+               TagLib artwork and tags in Tracker's space-bar panel; built from these sources
+               as position independent code when the SDK has add-ons/quick_look/QuickLook.h
 src/ui       Haiku Interface Kit
   App                BApplication: owns everything, background scan/sync jobs
   MainWindow         toolbar / sidebar / content cards / status bar
