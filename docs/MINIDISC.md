@@ -27,6 +27,9 @@ sends 16-bit 44.1 kHz PCM and the recorder does the ATRAC encoding itself.
   recorder, it waits for all of it.
 - **Erase Disc…** (disc view, or the sidebar entry's context menu) empties the disc after
   asking.
+- When a write or an erase has finished, the display shows the outcome for a few seconds
+  and a system notification (Amp's icon, the "MiniDisc" title and the outcome in one line)
+  says so wherever the window is: covered, on another workspace, minimized.
 
 Capacity: the recorder reports free space in SP time. A song takes its length rounded up to
 whole clusters (2.0434 s each) plus one more cluster, which matches the recorder exactly (five

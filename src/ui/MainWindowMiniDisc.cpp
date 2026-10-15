@@ -4,9 +4,13 @@
 #include "App.h"
 #include "core/NetMD.h"
 #include <Alert.h>
+#include <Bitmap.h>
 #include <Button.h>
 #include <Entry.h>
 #include <MessageRunner.h>
+#include <NodeInfo.h>
+#include <Notification.h>
+#include <Roster.h>
 #include <set>
 
 namespace amp {
@@ -33,6 +37,28 @@ void Inform(const char* title, const BString& text, alert_type type = B_INFO_ALE
     BAlert* alert = new BAlert(title, text.String(), "OK", nullptr, nullptr, B_WIDTH_AS_USUAL, type);
     alert->SetShortcut(0, B_ESCAPE);
     alert->Go(nullptr);
+}
+
+// A system notification about a finished MiniDisc job, so the outcome is seen when Amp's
+// window is covered or on another workspace (#8). The outcome goes in the body as one
+// sentence: the body wraps, the title line is cut short by the panel and a line break is
+// shown as a space. It carries Amp's icon, and one replaces the last: a write never stacks
+// up behind an erase.
+void NotifyMiniDisc(const BString& headline, const BString& detail, bool failed)
+{
+    BNotification notification(failed ? B_ERROR_NOTIFICATION : B_INFORMATION_NOTIFICATION);
+    notification.SetGroup("Amp");
+    notification.SetTitle("MiniDisc");
+    BString content(headline);
+    if (!detail.IsEmpty())
+        content << ". " << detail;
+    notification.SetContent(content);
+    notification.SetMessageID("amp-minidisc");
+    app_info info;
+    BBitmap icon(BRect(0, 0, 31, 31), B_RGBA32);
+    if (be_app->GetAppInfo(&info) == B_OK && BNodeInfo::GetTrackerIcon(&info.ref, &icon, B_LARGE_ICON) == B_OK)
+        notification.SetIcon(&icon);
+    notification.Send();
 }
 
 // The MiniDisc's page in the display.
@@ -371,6 +397,7 @@ void MainWindow::MiniDiscFinished(BMessage* message)
         fToolbar->SetActivity(status);
         fToolbar->ShowPage("minidisc"); // the outcome shows even when the song was on show
         ClearMiniDiscStatus(6000000);
+        NotifyMiniDisc(status.headline, status.detail, !ok);
         if (!ok)
             Inform("MiniDisc", error, B_WARNING_ALERT);
         MiniDiscChanged();
@@ -400,6 +427,7 @@ void MainWindow::MiniDiscFinished(BMessage* message)
     fToolbar->SetActivity(status);
     fToolbar->ShowPage("minidisc"); // the outcome shows even when the song was on show
     ClearMiniDiscStatus(10000000);
+    NotifyMiniDisc(status.headline, status.detail, status.failed);
     fMiniDiscView->EndWrite();
     fMDFraction = -1;
     fStatus->SetTransient(BString(status.headline) << ". " << status.detail, 10);
