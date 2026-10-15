@@ -243,6 +243,14 @@ void ToolbarView::DrawPager(BRect r)
     }
 }
 
+// The corner radius that gives a bar round ends: half its height. app_server draws a
+// rounded rectangle whose radius exceeds that with the arcs overshooting the ends, which
+// shows as a vertical line past each end of the groove (#6).
+static float BarRadius(BRect bar)
+{
+    return bar.Height() / 2;
+}
+
 void ToolbarView::DrawActivity(const Activity& activity, BRect r)
 {
     switch (activity.kind) {
@@ -276,13 +284,14 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
 
     // the bar: filled to the fraction, or moving stripes while the length is unknown
     BRect bar = fProgressRect;
+    float radius = BarRadius(bar);
     SetHighColor(theme::kLcdBarBackground);
-    FillRoundRect(bar, 2.5f, 2.5f);
+    FillRoundRect(bar, radius, radius);
     if (activity.fraction >= 0 || activity.done) {
         float fraction = activity.done ? 1.0f : std::min(1.0f, activity.fraction);
         float right = floorf(bar.left + bar.Width() * fraction);
         if (right > bar.left + 1)
-            FillRoundGradient(this, BRect(bar.left, bar.top, right, bar.bottom), 2.5f,
+            FillRoundGradient(this, BRect(bar.left, bar.top, right, bar.bottom), radius,
                 Blend(theme::kLcdBar, Rgb(255, 255, 255), 0.12f), theme::kLcdBar);
     } else {
         BRegion clip(bar.InsetByCopy(1, 0));
@@ -295,7 +304,7 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
         ConstrainClippingRegion(nullptr);
     }
     SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.1f));
-    StrokeRoundRect(bar, 2.5f, 2.5f);
+    StrokeRoundRect(bar, radius, radius);
     BFont small(be_plain_font);
     small.SetSize(9);
     SetFont(&small);
@@ -484,18 +493,19 @@ void ToolbarView::DrawProgress(BRect lcd)
 {
     // a slim groove with the elapsed part filled and a small round playhead
     BRect bar = fProgressRect;
+    float radius = BarRadius(bar);
     SetHighColor(theme::kLcdBarBackground);
-    FillRoundRect(bar, 2.5f, 2.5f);
+    FillRoundRect(bar, radius, radius);
     SetHighColor(Blend(theme::kLcdBarBackground, Rgb(0, 0, 0), 0.22f));
     StrokeLine(BPoint(bar.left + 2, bar.top), BPoint(bar.right - 2, bar.top)); // inner shadow
     float fraction = fDuration > 0 ? std::min(1.0f, std::max(0.0f, (float)fPosition / (float)fDuration)) : 0.0f;
     float knobX = floorf(bar.left + 5 + (bar.Width() - 10) * fraction);
     if (fDuration > 0 && knobX > bar.left + 2) {
         BRect done(bar.left, bar.top, knobX, bar.bottom);
-        FillRoundGradient(this, done, 2.5f, Blend(theme::kLcdBar, Rgb(255, 255, 255), 0.12f), theme::kLcdBar);
+        FillRoundGradient(this, done, radius, Blend(theme::kLcdBar, Rgb(255, 255, 255), 0.12f), theme::kLcdBar);
     }
     SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.1f));
-    StrokeRoundRect(bar, 2.5f, 2.5f);
+    StrokeRoundRect(bar, radius, radius);
     if (fDuration > 0) {
         float cy = bar.top + 2; // the groove is five pixels tall: this is its middle row
         BRect knob(knobX - 5, cy - 5, knobX + 5, cy + 5);
