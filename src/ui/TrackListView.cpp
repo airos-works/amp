@@ -421,7 +421,9 @@ BString TrackListView::CellText(const Track& track, int field) const
 
 void TrackListView::DrawHeader(BView* target, BRect bounds)
 {
-    BRect header(bounds.left, bounds.top, bounds.right, bounds.top + theme::kHeaderHeight - 1);
+    // every row of the header view is painted: a row left out keeps what was on the screen
+    // before (the grid's captions showed through under the header, #7)
+    BRect header = bounds;
     FillVerticalGradient(target, header, theme::kHeaderTop, theme::kHeaderBottom);
     target->SetHighColor(theme::kHeaderBorder);
     target->StrokeLine(header.LeftBottom(), header.RightBottom());
@@ -648,8 +650,9 @@ TrackHeaderView::TrackHeaderView(TrackListView* list, const char* name)
     , fList(list)
 {
     SetViewColor(B_TRANSPARENT_COLOR);
-    SetExplicitMinSize(BSize(160, theme::kHeaderHeight));
-    SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, theme::kHeaderHeight));
+    // a layout size is a frame height: kHeaderHeight pixel rows need kHeaderHeight - 1
+    SetExplicitMinSize(BSize(160, theme::kHeaderHeight - 1));
+    SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, theme::kHeaderHeight - 1));
 }
 
 TrackHeaderView::~TrackHeaderView()
