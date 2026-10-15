@@ -1,5 +1,7 @@
 // BSoundPlayer-backed audio output with a lock-free-ish ring buffer of 16-bit stereo frames.
 #pragma once
+#include <Looper.h>
+#include <MediaNode.h>
 #include <SoundPlayer.h>
 #include <atomic>
 #include <condition_variable>
@@ -39,12 +41,25 @@ public:
     void ResetConsumed() { fConsumed = 0; }
     bigtime_t Latency() const;
     bool Underrun() const { return fUnderrun; }
+    // How many times the sound player was made anew after the system mixer went away.
+    int Reopens() const { return fReopens; }
 
 private:
+    class Watcher;
+    friend class Watcher;
+
     static void PlayBuffer(void* cookie, void* buffer, size_t size, const media_raw_audio_format& format);
     void Fill(float* out, size_t frames);
+    bool CreatePlayer();
+    void MixerGone(media_node_id node);
+    void Reopen();
 
     BSoundPlayer* fPlayer = nullptr;
+    mutable std::mutex fPlayerMutex;
+    Watcher* fWatcher = nullptr;
+    media_node_id fMixer = -1;        // the system mixer the player is connected to
+    std::atomic<bool> fReopening{false};
+    std::atomic<int> fReopens{0};
     int fSampleRate = 0;
     std::vector<int16_t> fRing;   // interleaved stereo
     size_t fCapacity = 0;         // frames

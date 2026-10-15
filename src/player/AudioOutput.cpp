@@ -1,14 +1,99 @@
 #include "AudioOutput.h"
+#include <MediaDefs.h>
+#include <MediaRoster.h>
+#include <Message.h>
+#include <Messenger.h>
+#include <OS.h>
+#include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <thread>
 
 namespace amp {
+
+// Hears from the media roster when nodes go away. A BSoundPlayer plays into
+// the system mixer, which lives in the media_addon_server; when that server
+// dies (a crash, or "Restart media services") the player is left talking to
+// nothing and never notices. The watcher sees the mixer node being deleted
+// and the output then makes a new player as soon as a new mixer exists.
+class AudioOutput::Watcher : public BLooper {
+public:
+    explicit Watcher(AudioOutput& output)
+        : BLooper("Amp audio watcher"), fOutput(output)
+    {
+        Run();
+        BMediaRoster* roster = BMediaRoster::Roster();
+        if (roster) {
+            roster->StartWatching(BMessenger(this), B_MEDIA_NODE_DELETED);
+            roster->StartWatching(BMessenger(this), B_MEDIA_SERVER_STARTED);
+        }
+    }
+
+    void Detach()
+    {
+        BMediaRoster* roster = BMediaRoster::CurrentRoster();
+        if (roster) {
+            roster->StopWatching(BMessenger(this), B_MEDIA_NODE_DELETED);
+            roster->StopWatching(BMessenger(this), B_MEDIA_SERVER_STARTED);
+        }
+    }
+
+    void MessageReceived(BMessage* message) override
+    {
+        if (message->what != B_MEDIA_NODE_DELETED && message->what != B_MEDIA_SERVER_STARTED) {
+            BLooper::MessageReceived(message);
+            return;
+        }
+        if (message->what == B_MEDIA_SERVER_STARTED) {
+            fOutput.MixerGone(-1);
+            return;
+        }
+        int32 node;
+        for (int32 i = 0; message->FindInt32("media_node_id", i, &node) == B_OK; i++)
+            fOutput.MixerGone(node);
+    }
+
+private:
+    AudioOutput& fOutput;
+};
 
 AudioOutput::AudioOutput() {}
 
 AudioOutput::~AudioOutput()
 {
     Close();
+    if (fWatcher) {
+        fWatcher->Detach();
+        fWatcher->Lock();
+        fWatcher->Quit();
+        fWatcher = nullptr;
+    }
+}
+
+bool AudioOutput::CreatePlayer()
+{
+    media_raw_audio_format format = media_raw_audio_format::wildcard;
+    format.frame_rate = (float)fSampleRate;
+    format.channel_count = 2;
+    format.format = media_raw_audio_format::B_AUDIO_FLOAT;
+    format.byte_order = B_MEDIA_HOST_ENDIAN;
+    format.buffer_size = 2048 * sizeof(float) * 2; // 2048 frames per buffer
+    BSoundPlayer* player = new BSoundPlayer(&format, "Amp", PlayBuffer, nullptr, this);
+    if (player->InitCheck() != B_OK) {
+        delete player;
+        return false;
+    }
+    media_node mixer;
+    BMediaRoster* roster = BMediaRoster::Roster();
+    fMixer = roster && roster->GetAudioMixer(&mixer) == B_OK ? mixer.node : -1;
+    if (fMixer >= 0)
+        roster->ReleaseNode(mixer);
+    fPlayer = player;
+    fPlayer->SetHasData(true);
+    fPlayer->Start();
+    if (!fWatcher)
+        fWatcher = new Watcher(*this);
+    return true;
 }
 
 bool AudioOutput::Open(int sampleRate)
@@ -16,18 +101,7 @@ bool AudioOutput::Open(int sampleRate)
     if (fPlayer && fSampleRate == sampleRate)
         return true;
     Close();
-    media_raw_audio_format format = media_raw_audio_format::wildcard;
-    format.frame_rate = (float)sampleRate;
-    format.channel_count = 2;
-    format.format = media_raw_audio_format::B_AUDIO_FLOAT;
-    format.byte_order = B_MEDIA_HOST_ENDIAN;
-    format.buffer_size = 2048 * sizeof(float) * 2; // 2048 frames per buffer
-    fPlayer = new BSoundPlayer(&format, "Amp", PlayBuffer, nullptr, this);
-    if (fPlayer->InitCheck() != B_OK) {
-        delete fPlayer;
-        fPlayer = nullptr;
-        return false;
-    }
+    std::lock_guard<std::mutex> lock(fPlayerMutex);
     fSampleRate = sampleRate;
     fCapacity = (size_t)sampleRate * 3 / 2; // 1.5 seconds
     fRing.assign(fCapacity * 2, 0);
@@ -35,22 +109,75 @@ bool AudioOutput::Open(int sampleRate)
     fCount = 0;
     fAbort = false;
     fConsumed = 0;
-    fPlayer->SetHasData(true);
-    fPlayer->Start();
+    if (!CreatePlayer()) {
+        fSampleRate = 0;
+        return false;
+    }
     return true;
 }
 
 void AudioOutput::Close()
 {
     AbortWriters();
+    std::lock_guard<std::mutex> lock(fPlayerMutex);
     if (fPlayer) {
         fPlayer->Stop();
         delete fPlayer;
         fPlayer = nullptr;
     }
+    fMixer = -1;
     fSampleRate = 0;
     fCount = 0;
     fReadPos = fWritePos = 0;
+}
+
+void AudioOutput::MixerGone(media_node_id node)
+{
+    {
+        std::lock_guard<std::mutex> lock(fPlayerMutex);
+        if (!fPlayer || (node >= 0 && node != fMixer))
+            return;
+        // A new media_server numbers its nodes from the start again, so the
+        // old mixer's number must not be taken for the new mixer's.
+        if (node < 0)
+            fMixer = -1;
+    }
+    if (fReopening.exchange(true))
+        return;
+    fprintf(stderr, "Amp: the system mixer went away, waiting for a new one\n");
+    std::thread([this] { Reopen(); }).detach();
+}
+
+// Waits for a new system mixer (the media_addon_server starting again) and
+// plays on through a new sound player. The ring buffer and the frame count
+// stay as they are, so the song goes on where it was and the position shown
+// stays right; the decoder, blocked on a full ring, never notices.
+void AudioOutput::Reopen()
+{
+    BMediaRoster* roster = BMediaRoster::Roster();
+    for (int attempt = 0; attempt < 120; attempt++) {
+        snooze(500000);
+        std::lock_guard<std::mutex> lock(fPlayerMutex);
+        if (!fPlayer) // closed in the meantime
+            break;
+        media_node mixer;
+        if (!roster || roster->GetAudioMixer(&mixer) != B_OK)
+            continue;
+        media_node_id id = mixer.node;
+        roster->ReleaseNode(mixer);
+        if (id == fMixer)
+            continue;
+        BSoundPlayer* old = fPlayer;
+        fPlayer = nullptr;
+        old->Stop();
+        delete old;
+        if (CreatePlayer()) {
+            fReopens++;
+            fprintf(stderr, "Amp: playing on through the new system mixer\n");
+            break;
+        }
+    }
+    fReopening = false;
 }
 
 void AudioOutput::SetVolume(float volume)
@@ -69,6 +196,7 @@ void AudioOutput::SetPlaying(bool playing)
 
 bigtime_t AudioOutput::Latency() const
 {
+    std::lock_guard<std::mutex> lock(fPlayerMutex);
     return fPlayer ? fPlayer->Latency() : 0;
 }
 
