@@ -15,8 +15,33 @@ UI_OBJ = $(UI:%.cpp=$(BUILD)/%.o)
 CORE_LIBS = -lcurl -lsqlite3 -ltag -lnetwork -lpthread
 LIBS = -lbe -lmedia -ldevice -ltranslation -ltracker -llocalestub $(CORE_LIBS)
 .PHONY: all core player package clean icon check mdtool scantool
-all: $(BUILD)/Amp
+# The Quick Look add-on (src/quicklook): the local decoder and the output built again as
+# position independent code for air/OS's quick_look_server. Needs the Quick Look headers and
+# libquicklook; an SDK without them leaves it out. QUICKLOOK=1 forces it, with
+# QUICKLOOK_CPPFLAGS and QUICKLOOK_LDFLAGS pointing at them.
+HAIKU_HEADERS ?= /boot/system/develop/headers
+QUICKLOOK_CPPFLAGS ?=
+QUICKLOOK_LDFLAGS ?=
+QUICKLOOK ?= $(if $(wildcard $(HAIKU_HEADERS)/os/add-ons/quick_look/QuickLook.h),1,)
+QUICKLOOK_SRC = src/player/LocalDecoder.cpp src/player/AudioOutput.cpp src/quicklook/QuickLookAddOn.cpp
+QUICKLOOK_OBJ = $(QUICKLOOK_SRC:%.cpp=$(BUILD)/quicklook/%.o)
+QUICKLOOK_TARGET = $(if $(QUICKLOOK),$(BUILD)/Amp_quicklook,)
+
+all: $(BUILD)/Amp $(QUICKLOOK_TARGET)
 core: $(CORE_OBJ)
+
+.PHONY: quicklook
+quicklook: $(BUILD)/Amp_quicklook
+
+$(BUILD)/Amp_quicklook: $(QUICKLOOK_OBJ)
+	$(CXX) -shared -Wl,-soname=Amp -o $@.new $(QUICKLOOK_OBJ) $(QUICKLOOK_LDFLAGS) -lquicklook -lbe -lmedia -ltranslation -ltag
+	mv $@.new $@
+
+$(BUILD)/quicklook/%.o: %.cpp
+	mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(QUICKLOOK_CPPFLAGS) $(CXXFLAGS) -fPIC -MMD -MP -c $< -o $@
+
+-include $(QUICKLOOK_OBJ:.o=.d)
 IMAGES = $(wildcard resources/images/*.png)
 $(BUILD)/Amp: $(CORE_OBJ) $(PLAYER_OBJ) $(UI_OBJ) resources/Amp.rdef resources/branding/amp-icon.hvif $(IMAGES)
 	$(CXX) -o $@.new $(CORE_OBJ) $(PLAYER_OBJ) $(UI_OBJ) $(LIBS)

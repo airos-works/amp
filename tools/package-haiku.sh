@@ -17,6 +17,12 @@ cp build-haiku/Amp "$STAGE/apps/Amp"
 strip --strip-debug "$STAGE/apps/Amp"
 # GNU strip removes the appended Haiku resources; restore them.
 xres -o "$STAGE/apps/Amp" build-haiku/Amp.rsrc
+# The Quick Look add-on, where the SDK had Quick Look.
+if [ -f build-haiku/Amp_quicklook ]; then
+    mkdir -p "$STAGE/add-ons/quick_look"
+    cp build-haiku/Amp_quicklook "$STAGE/add-ons/quick_look/Amp"
+    strip --strip-debug "$STAGE/add-ons/quick_look/Amp"
+fi
 cp resources/Amp.PackageInfo "$STAGE/.PackageInfo"
 cp README.md LICENSE "$STAGE/documentation/packages/amp/"
 cp -R docs "$STAGE/documentation/packages/amp/"

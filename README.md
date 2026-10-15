@@ -53,6 +53,11 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   bar; the display shows iTunes-style progress with a cancel button. Amp asks before erasing
   a disc that has songs (or adds after them) and offers to write the songs that fit when a
   playlist is too long. See `docs/MINIDISC.md`.
+- Quick Look: on air/OS, the space bar in Tracker plays a song in the Quick Look panel with
+  Amp's own decoder and output, showing its artwork and tags with play/pause and a scrubber;
+  a double click on the picture opens it in Amp. The add-on (`src/quicklook/`, shipped as
+  `add-ons/quick_look/Amp`) is built when the SDK has `add-ons/quick_look/QuickLook.h`
+  (`make QUICKLOOK=1` forces it).
 - Library folders, the Music Assistant server and account and the artwork sources live in one
   Settings window, opened from the **Settings** button at the bottom right of the main window
   or File > Settings….
