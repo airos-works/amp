@@ -420,6 +420,13 @@ int64_t Library::AlbumIdFor(const Track& track) const
     return track.albumId;
 }
 
+int64_t Library::AlbumIdFor(const std::string& artist, const std::string& name, bool ma) const
+{
+    std::lock_guard<std::recursive_mutex> lock(fMutex);
+    auto it = fAlbumByKey.find(GroupKey(artist, name) + (ma ? "|ma" : ""));
+    return it == fAlbumByKey.end() ? 0 : it->second;
+}
+
 int64_t Library::ArtistIdFor(const std::string& name) const
 {
     std::lock_guard<std::recursive_mutex> lock(fMutex);

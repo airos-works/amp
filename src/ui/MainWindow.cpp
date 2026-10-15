@@ -357,6 +357,8 @@ void MainWindow::ClearDrillDown()
 {
     // called whenever a different list is about to be shown: it starts without a selection
     fShownAlbum = 0;
+    fShownAlbumArtist.clear();
+    fShownAlbumName.clear();
     fDrillTracks.clear();
     fTrackList->ClearSelection();
 }
@@ -396,7 +398,7 @@ void MainWindow::ReloadContent()
     {
         Library::Locker locker(library);
         if (fShownAlbum != 0) {
-            if (const Album* album = library.AlbumById(fShownAlbum))
+            if (const Album* album = library.AlbumById(ResolveShownAlbum(library)))
                 tracks = album->trackIds;
         } else if (!fDrillTracks.empty()) {
             tracks = fDrillTracks;
@@ -535,10 +537,36 @@ void MainWindow::ShowAlbum(int64_t albumId)
 {
     ClearDrillDown();
     fShownAlbum = albumId;
+    {
+        Library& library = App()->GetLibrary();
+        Library::Locker locker(library);
+        const Album* album = library.AlbumById(albumId);
+        fShownAlbumArtist = album ? album->artist : std::string();
+        fShownAlbumName = album ? album->name : std::string();
+        fShownAlbumMA = album && album->isMA();
+    }
     if (fSource == "artists" || fSource == "playlist")
         fSource = "music";
     fSidebar->Select(fSource.c_str(), 0);
     ReloadContent();
+}
+
+int64_t MainWindow::ResolveShownAlbum(Library& library)
+{
+    // The index numbers albums afresh whenever it is rebuilt, which a running scan does
+    // every few seconds: the id opened from the grid soon names another album (#9). The
+    // album is found again by artist and name; while it is not there (its songs are still
+    // being read) the list stays empty rather than showing a stranger.
+    if (fShownAlbum == 0 || fShownAlbumName.empty())
+        return fShownAlbum;
+    const Album* album = library.AlbumById(fShownAlbum);
+    if (album && album->artist == fShownAlbumArtist && album->name == fShownAlbumName
+        && album->isMA() == fShownAlbumMA)
+        return fShownAlbum;
+    int64_t found = library.AlbumIdFor(fShownAlbumArtist, fShownAlbumName, fShownAlbumMA);
+    if (found != 0)
+        fShownAlbum = found;
+    return found;
 }
 
 void MainWindow::ShowArtist(int64_t artistId)

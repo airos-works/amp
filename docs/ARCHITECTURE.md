@@ -150,6 +150,11 @@ playlists each remember their own mode (`viewMode`, `playlistViewMode`).
 - The grid shows `AlbumCell`s: library albums, or for a playlist the albums found in it in
   order of first appearance, each holding only the playlist's songs of that album. Opening a
   library cell uses `kMsgShowAlbum`; a playlist cell sends its songs with `kMsgShowTracks`.
+- Album and artist ids are numbered by `Library::RebuildIndex`, afresh each time, in the
+  order the songs are met; track ids are database rows and stay. A scan rebuilds the index
+  every few seconds, so the window keeps the opened album by artist and name
+  (`ResolveShownAlbum`, through `Library::AlbumIdFor(artist, name, ma)`) and the artists view
+  keeps its selection by name (`ArtistIdFor`), finding them again after every reload.
 - Rows of an editable playlist map to playlist positions (`fPositions`) when a search filter
   hides some of them, so remove and drag act on the right entries. Drag reordering is offered
   in the unfiltered list view only.

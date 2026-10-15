@@ -336,19 +336,45 @@ void ArtistsView::SetArtists(const std::vector<int64_t>& ids)
 {
     fList->SetArtists(ids);
     int64_t selected = fList->Selected();
+    {
+        // the index numbers artists afresh when it is rebuilt (a running scan does that every
+        // few seconds): the selected id may name someone else now, so the artist is found
+        // again by name (#9)
+        Library& library = App()->GetLibrary();
+        Library::Locker locker(library);
+        const Artist* artist = library.ArtistById(selected);
+        if (!fSelectedName.empty() && (!artist || artist->name != fSelectedName)) {
+            int64_t found = library.ArtistIdFor(fSelectedName);
+            if (found != 0)
+                selected = found;
+        }
+    }
     bool stillThere = false;
     for (int64_t id : ids)
         if (id == selected)
             stillThere = true;
     if (!stillThere)
-        fList->Select(ids.empty() ? 0 : ids.front(), false);
+        selected = ids.empty() ? 0 : ids.front();
+    if (selected != fList->Selected())
+        fList->Select(selected, false);
+    if (!stillThere)
+        RememberSelection();
     ReloadTracks();
 }
 
 void ArtistsView::SelectArtist(int64_t artistId)
 {
     fList->Select(artistId, false);
+    RememberSelection();
     ReloadTracks();
+}
+
+void ArtistsView::RememberSelection()
+{
+    Library& library = App()->GetLibrary();
+    Library::Locker locker(library);
+    const Artist* artist = library.ArtistById(fList->Selected());
+    fSelectedName = artist ? artist->name : std::string();
 }
 
 void ArtistsView::ReloadTracks()
@@ -368,6 +394,7 @@ void ArtistsView::ReloadTracks()
 void ArtistsView::MessageReceived(BMessage* message)
 {
     if (message->what == kMsgArtistSelected) {
+        RememberSelection();
         ReloadTracks();
         Window()->PostMessage(kMsgSelectionChanged);
         return;

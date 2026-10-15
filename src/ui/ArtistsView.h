@@ -3,6 +3,7 @@
 #include "TrackListView.h"
 #include <String.h>
 #include <View.h>
+#include <string>
 #include <vector>
 
 namespace amp {
@@ -64,9 +65,12 @@ public:
     void MessageReceived(BMessage* message) override;
 
 private:
+    void RememberSelection();
+
     ArtistListView* fList;
     ArtistHeaderView* fHeader;
     TrackListView* fTracks;
+    std::string fSelectedName;   // the selected artist by name: ids change with every index rebuild
 };
 
 } // namespace amp

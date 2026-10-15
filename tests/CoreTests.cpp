@@ -360,6 +360,38 @@ void TestClearMusicAssistant()
     RemoveFolder(folder);
 }
 
+// Album and artist ids are handed out afresh by every index rebuild; a view that opened an
+// album finds it again by artist and name (#9).
+void TestAlbumIdsAcrossRebuild()
+{
+    std::string folder = TempFolder("library-ids");
+    {
+        Library library(folder + "/library.db");
+        std::string error;
+        CHECK(library.Open(error));
+        std::vector<Track> first = {MakeTrack(Source::Local, "/music/m/1.flac", "Middle Album")};
+        library.UpsertTracks(first, true);
+        int64_t middle = library.AlbumIdFor("Artist", "Middle Album", false);
+        CHECK(middle != 0);
+        CHECK(library.AlbumById(middle) != nullptr && library.AlbumById(middle)->name == "Middle Album");
+        CHECK(library.AlbumIdFor("Artist", "Middle Album", true) == 0); // not a Music Assistant album
+        CHECK(library.AlbumIdFor("Artist", "No Such Album", false) == 0);
+        // songs read before it in the next scan push the album to another id
+        std::vector<Track> earlier = {MakeTrack(Source::Local, "/music/a/1.flac", "Album A"),
+            MakeTrack(Source::Local, "/music/a/2.flac", "Album B")};
+        library.UpsertTracks(earlier, true);
+        int64_t again = library.AlbumIdFor("artist", "middle album", false); // the key ignores case
+        CHECK(again != 0);
+        CHECK(library.AlbumById(again)->name == "Middle Album");
+        CHECK(library.AlbumById(again)->trackIds.size() == 1);
+        bool moved = again != middle || library.AlbumById(middle)->name != "Middle Album";
+        CHECK(moved || library.AllAlbumIds().size() == 3);
+        CHECK(library.ArtistIdFor("Artist") != 0);
+    }
+    unlink((folder + "/library.db").c_str());
+    rmdir(folder.c_str());
+}
+
 void TestTagStream()
 {
     std::string folder = TempFolder("stream");
@@ -645,6 +677,7 @@ int main()
     TestProtocol();
     TestQueueRemoveIf();
     TestClearMusicAssistant();
+    TestAlbumIdsAcrossRebuild();
     TestTagStream();
     TestMp4();
     TestScanner();

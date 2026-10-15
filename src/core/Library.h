@@ -46,6 +46,10 @@ public:
     std::vector<int64_t> AllArtistIds() const;     // sorted by name
     std::vector<int64_t> AllPlaylistIds() const;   // local first, then MA, by name
     int64_t AlbumIdFor(const Track& track) const;
+    // The album of that artist and name (local or Music Assistant), or 0. Album and artist
+    // ids are numbered afresh by every index rebuild: a view that keeps one across a
+    // library change finds its album again with this.
+    int64_t AlbumIdFor(const std::string& artist, const std::string& name, bool ma) const;
     int64_t ArtistIdFor(const std::string& name) const;
     std::vector<int64_t> SearchTracks(const std::string& query) const;
     size_t TrackCount() const;

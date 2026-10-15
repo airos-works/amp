@@ -71,6 +71,10 @@ private:
     std::string fSource = "music";
     int64_t fPlaylistId = 0;
     int64_t fShownAlbum = 0;
+    // what names the shown album: its id changes with every index rebuild while a scan runs
+    std::string fShownAlbumArtist, fShownAlbumName;
+    bool fShownAlbumMA = false;
+    int64_t ResolveShownAlbum(class Library& library);
     int fViewMode = 0;
     int fPlaylistViewMode = 0;
     std::vector<int64_t> fDrillTracks;     // songs of a playlist-only album opened from the grid
