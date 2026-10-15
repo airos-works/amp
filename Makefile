@@ -23,7 +23,7 @@ HAIKU_HEADERS ?= /boot/system/develop/headers
 QUICKLOOK_CPPFLAGS ?=
 QUICKLOOK_LDFLAGS ?=
 QUICKLOOK ?= $(if $(wildcard $(HAIKU_HEADERS)/os/add-ons/quick_look/QuickLook.h),1,)
-QUICKLOOK_SRC = src/player/LocalDecoder.cpp src/player/AudioOutput.cpp src/quicklook/QuickLookAddOn.cpp
+QUICKLOOK_SRC = src/player/LocalDecoder.cpp src/player/AudioOutput.cpp src/ui/Theme.cpp src/ui/Icons.cpp src/quicklook/QuickLookAddOn.cpp
 QUICKLOOK_OBJ = $(QUICKLOOK_SRC:%.cpp=$(BUILD)/quicklook/%.o)
 QUICKLOOK_TARGET = $(if $(QUICKLOOK),$(BUILD)/Amp_quicklook,)
 
