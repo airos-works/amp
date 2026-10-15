@@ -86,7 +86,8 @@ BBitmap* FolderArt(const entry_ref& ref)
 
 class ArtView : public BView {
 public:
-    ArtView() : BView("art", B_WILL_DRAW) { SetViewColor(B_TRANSPARENT_COLOR); }
+    // The picture is scaled to the view, so a resize redraws all of it.
+    ArtView() : BView("art", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE) { SetViewColor(B_TRANSPARENT_COLOR); }
     void SetBitmap(BBitmap* bitmap) { fBitmap = bitmap; Invalidate(); }
     void Draw(BRect) override
     {
