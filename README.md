@@ -8,7 +8,7 @@ server sends audio straight to the Haiku machine.
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `2e2eae8` on 2026-10-15 ([all files](https://github.com/jmgasper/amp/releases/tag/latest)).
+Built automatically by air/OS CI from commit `c54a8f1` on 2026-10-15 ([all files](https://github.com/jmgasper/amp/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|
