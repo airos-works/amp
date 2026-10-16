@@ -4,6 +4,7 @@
 #include "core/ArtistLinks.h"
 #include "core/Http.h"
 #include "player/Messages.h"
+#include "player/MediaKeys.h"
 #include <Alert.h>
 #include <MediaFile.h>
 #include <MediaTrack.h>
@@ -220,9 +221,50 @@ void AmpApp::MessageReceived(BMessage* message)
             fPlayer->HandleTrackFinished(generation);
             break;
         }
+        case kMsgMediaKey:
+            HandleMediaKey(message);
+            break;
         default:
             BApplication::MessageReceived(message);
     }
+}
+
+// A keyboard's media key, from the system's mediakey command (see MediaKeys.h): a query asks
+// whether Amp plays right now; the key itself goes to the main window like its menu items.
+void AmpApp::HandleMediaKey(BMessage* message)
+{
+    int32 key = message->GetInt32("key", -1);
+    bool playing = fPlayer->State() == kPlaying;
+    bool canHandle = fWindow != nullptr && key >= B_MEDIA_KEY_PLAY_PAUSE && key <= B_MEDIA_KEY_PREVIOUS;
+    if (message->GetBool("query", false)) {
+        reply_media_key_query(message, canHandle, playing);
+        return;
+    }
+    if (canHandle) {
+        switch (key) {
+            case B_MEDIA_KEY_PLAY_PAUSE:
+                fWindow->PostMessage(kMsgPlayPause);
+                break;
+            case B_MEDIA_KEY_PLAY:
+                if (!playing)
+                    fWindow->PostMessage(kMsgPlayPause);
+                break;
+            case B_MEDIA_KEY_PAUSE:
+                if (playing)
+                    fWindow->PostMessage(kMsgPlayPause);
+                break;
+            case B_MEDIA_KEY_STOP:
+                fWindow->PostMessage(kMsgStop);
+                break;
+            case B_MEDIA_KEY_NEXT:
+                fWindow->PostMessage(kMsgNext);
+                break;
+            case B_MEDIA_KEY_PREVIOUS:
+                fWindow->PostMessage(kMsgPrevious);
+                break;
+        }
+    }
+    reply_media_key_handled(message, canHandle);
 }
 
 void AmpApp::RefsReceived(BMessage* message)

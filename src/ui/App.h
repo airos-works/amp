@@ -39,6 +39,7 @@ public:
     MusicAssistant& MA() { return *fMA; }
     MiniDiscManager& MiniDisc() { return *fMiniDisc; }
     MainWindow* Window() { return fWindow; }
+    void HandleMediaKey(BMessage* message);
 
     void StartScan();
     void ConnectMusicAssistant(bool resync);
