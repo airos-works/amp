@@ -31,7 +31,8 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   off in the settings removes its songs, albums, artists and playlists from the library.
 - Browse by song list, album-grouped list with artwork, album grid, artists, and playlists;
   instant search across title, artist and album. Playlists offer the same three views
-  (list, album list, cover grid) and remember their own choice. The column header lives in
+  (list, album list, cover grid) and remember their own choice; the albums and artists views
+  have their own layout and hide the view buttons. The column header lives in
   its own view above the table, so it stays put and is never redrawn over the rows while
   the list scrolls. Covers and artist pictures lie on a soft drop shadow. In the artists
   view, clicking the artist's picture or name opens the artist's MusicBrainz page in the
@@ -44,7 +45,8 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
 - Transport with volume, seek bar, shuffle and repeat; play queue with "Play Next" and
   "Add to Up Next". The display shows the playing track's artwork, title, artist and album,
   elapsed and remaining time, the MA badge for streamed tracks, and the source quality
-  ("Lossless" or the bit rate). Longer jobs (a MiniDisc write, a library scan, a Music
+  ("Lossless" or the bit rate); a click on the artwork opens the song's album with the song
+  selected. Longer jobs (a MiniDisc write, a library scan, a Music
   Assistant sync) get a page of their own in the display: while more than one thing is going
   on, the arrow beside the artwork, the dots under it or a click on the text turns between the
   song and each job, like iTunes' status display.

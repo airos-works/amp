@@ -93,6 +93,12 @@ on the text or a dot turns the page. A MiniDisc write comes to the front when it
 again when it ends; the scan and the sync never push the song aside. A song that starts
 playing is shown.
 
+A click on the song page's artwork (`kMsgShowNowPlaying`) opens the playing song's album with
+the song selected (`MainWindow::ShowNowPlaying`); a song that only lives in a playlist has no
+library album, so the songs of its album in the play queue are shown instead. The selection is
+made by a message posted after the reload, so the list scrolls to the song once the window
+has laid it out.
+
 ## Artist links
 
 Clicking the picture or the name in the artists view's header (`kMsgOpenArtistPage`) opens
@@ -141,7 +147,10 @@ minutes; before, the same scan ran at about two songs a second.
 ## View modes
 
 The toolbar's three buttons pick list, album list or cover grid. The library views and the
-playlists each remember their own mode (`viewMode`, `playlistViewMode`).
+playlists each remember their own mode (`viewMode`, `playlistViewMode`). The albums, artists
+and MiniDisc sources have a layout of their own: the buttons are hidden there
+(`MainWindow::ViewModeApplies`, `ToolbarView::SetViewButtonsShown`) and the View menu's
+shortcuts do nothing.
 
 - The album list groups *consecutive* rows of one album (`TrackListView::Relayout`), which for
   the album-ordered library is every album once, and for a playlist keeps the playlist order.

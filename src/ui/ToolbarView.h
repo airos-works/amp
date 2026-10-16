@@ -47,6 +47,9 @@ public:
     void SetProgress(int64_t positionMs, int64_t durationMs);
     void SetVolume(float volume);
     void SetViewMode(int mode);
+    // The view buttons pick how songs are listed; the albums, artists and MiniDisc views have
+    // a layout of their own and hide them.
+    void SetViewButtonsShown(bool shown);
     void SetLoadingText(const BString& text);
     BTextControl* SearchField() { return fSearch; }
 
@@ -61,7 +64,7 @@ public:
 
 private:
     enum Hot { kNone, kPrev, kPlay, kNext, kVolume, kProgress, kViewList, kViewGrouped, kViewGrid, kCancelActivity,
-        kPager, kPageDot, kPageText };
+        kPager, kPageDot, kPageText, kArtwork };
     void DrawActivity(const Activity& activity, BRect lcd);
     void DrawPager(BRect lcd);
     BRect CancelRect() const;
@@ -96,6 +99,7 @@ private:
     int64_t fPosition = 0, fDuration = 0;
     float fVolume = 0.8f;
     int fViewMode = 0;
+    bool fViewButtons = true;
     Hot fPressed = kNone;
     bool fTracking = false;
     BRect fPrevRect, fPlayRect, fNextRect, fVolumeRect, fLcdRect, fProgressRect, fViewRect, fSearchRect;
@@ -103,7 +107,8 @@ private:
     BString fShown;               // id of the activity on show; empty: the playing song
     bool fHadSong = false;
     int fPressedDot = -1;
-    BString fToolTipPage;         // what the pager's tool tip names
+    BString fToolTip;             // what the tool tip says: the pager's next page, the artwork's album
+    bool fOverArtwork = false;    // the pointer is a link cursor over the playing song's artwork
     float fStripePhase = 0;
     class BMessageRunner* fPulse = nullptr;
 };

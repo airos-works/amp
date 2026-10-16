@@ -26,6 +26,8 @@ public:
 
     void SelectSource(const std::string& source, int64_t playlistId, bool play = false);
     void ShowAlbum(int64_t albumId);
+    // The playing song, selected in its album (a click on the display's artwork).
+    void ShowNowPlaying();
     void ShowArtist(int64_t artistId);
     // Opens the artist's MusicBrainz page (a search when the artist is not known there) in
     // the preferred web browser.
@@ -37,6 +39,9 @@ private:
     void ReloadSidebar();
     void UpdateSummary(const std::vector<int64_t>& tracks);
     int CurrentViewMode() const { return fSource == "playlist" ? fPlaylistViewMode : fViewMode; }
+    // the view buttons pick how songs are listed: the albums, artists and MiniDisc views have
+    // a layout of their own
+    bool ViewModeApplies() const { return fSource != "albums" && fSource != "artists" && fSource != "minidisc"; }
     std::vector<AlbumCell> CellsFromLibrary(bool maOnly) const;
     std::vector<AlbumCell> CellsFromTracks(const std::vector<int64_t>& tracks) const;
     void ClearDrillDown();

@@ -4,6 +4,7 @@
 #include "Theme.h"
 #include "core/Model.h"
 #include <Bitmap.h>
+#include <Cursor.h>
 #include <Font.h>
 #include <GradientLinear.h>
 #include <GradientRadial.h>
@@ -428,6 +429,14 @@ void ToolbarView::SetViewMode(int mode)
     Invalidate(fViewRect.InsetByCopy(-2, -16));
 }
 
+void ToolbarView::SetViewButtonsShown(bool shown)
+{
+    if (shown == fViewButtons)
+        return;
+    fViewButtons = shown;
+    Invalidate(fViewRect.InsetByCopy(-2, -16));
+}
+
 void ToolbarView::DrawRoundButton(BRect rect, Hot which)
 {
     bool pressed = fPressed == which && fTracking;
@@ -621,6 +630,13 @@ void ToolbarView::DrawLcd()
 
 void ToolbarView::DrawViewButtons()
 {
+    BFont small(be_plain_font);
+    small.SetSize(9);
+    SetFont(&small);
+    SetHighColor(theme::kToolbarText);
+    DrawTruncated(this, "Search", BRect(fSearchRect.left, fSearchRect.bottom + 2, fSearchRect.right, fSearchRect.bottom + 14), B_ALIGN_CENTER, 0);
+    if (!fViewButtons)
+        return;
     BRect r = fViewRect;
     float w = r.Width() / 3;
     for (int i = 0; i < 3; i++) {
@@ -635,12 +651,9 @@ void ToolbarView::DrawViewButtons()
         icons::Icon glyph = i == 0 ? icons::kList : (i == 1 ? icons::kAlbumList : icons::kGrid);
         icons::Draw(this, glyph, cell, cell.Height() * 0.55f, active ? Rgb(255, 255, 255) : Rgb(70, 70, 70));
     }
-    BFont small(be_plain_font);
-    small.SetSize(9);
     SetFont(&small);
     SetHighColor(theme::kToolbarText);
     DrawTruncated(this, "View", BRect(r.left, r.bottom + 2, r.right, r.bottom + 14), B_ALIGN_CENTER, 0);
-    DrawTruncated(this, "Search", BRect(fSearchRect.left, fSearchRect.bottom + 2, fSearchRect.right, fSearchRect.bottom + 14), B_ALIGN_CENTER, 0);
 }
 
 void ToolbarView::Draw(BRect updateRect)
@@ -685,9 +698,11 @@ ToolbarView::Hot ToolbarView::HitTest(BPoint where) const
             return kCancelActivity;
     } else if (fProgressRect.InsetByCopy(-4, -7).Contains(where) && fState != kStopped)
         return kProgress;
+    else if (shown >= 0 && fArtRect.Contains(where))
+        return kArtwork; // the song's page: its artwork opens the album
     if (pages.size() > 1 && TextRect().Contains(where))
         return kPageText;
-    if (fViewRect.Contains(where)) {
+    if (fViewButtons && fViewRect.Contains(where)) {
         float w = fViewRect.Width() / 3;
         int index = (int)((where.x - fViewRect.left) / w);
         return index <= 0 ? kViewList : (index == 1 ? kViewGrouped : kViewGrid);
@@ -725,16 +740,25 @@ void ToolbarView::MouseDown(BPoint where)
 void ToolbarView::MouseMoved(BPoint where, uint32 transit, const BMessage* drag)
 {
     if (!fTracking) {
-        // the pager names the page it turns to
+        // the pager names the page it turns to; the artwork is a link to the song's album
         BString tip;
         Hot hot = transit == B_EXITED_VIEW || transit == B_OUTSIDE_VIEW ? kNone : HitTest(where);
         if (hot == kPager || hot == kPageText)
             tip = PageName(ShownIndex() + 1 < (int)Pages().size() ? ShownIndex() + 1 : 0);
         else if (hot == kPageDot)
             tip = PageName(PageDotAt(where));
-        if (tip != fToolTipPage) {
-            fToolTipPage = tip;
+        else if (hot == kArtwork && fAlbum.IsEmpty())
+            tip = "Show the playing song";
+        else if (hot == kArtwork)
+            tip << "Show the album \u201C" << fAlbum << "\u201D";
+        if (tip != fToolTip) {
+            fToolTip = tip;
             SetToolTip(tip.IsEmpty() ? (const char*)nullptr : tip.String());
+        }
+        if ((hot == kArtwork) != fOverArtwork) {
+            fOverArtwork = hot == kArtwork;
+            static const BCursor link(B_CURSOR_ID_FOLLOW_LINK);
+            SetViewCursor(fOverArtwork ? &link : B_CURSOR_SYSTEM_DEFAULT);
         }
         return;
     }
@@ -787,12 +811,16 @@ void ToolbarView::MouseUp(BPoint where)
         case kPageText:
             if (released == fPressed)
                 ShowIndex(ShownIndex() + 1);
-            fToolTipPage = "";
+            fToolTip = "";
             SetToolTip((const char*)nullptr);
             break;
         case kPageDot:
             if (released == kPageDot && PageDotAt(where) == fPressedDot)
                 ShowIndex(fPressedDot);
+            break;
+        case kArtwork:
+            if (released == kArtwork)
+                Window()->PostMessage(kMsgShowNowPlaying);
             break;
         case kViewList:
         case kViewGrouped:

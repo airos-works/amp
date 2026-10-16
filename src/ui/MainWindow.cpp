@@ -12,6 +12,7 @@
 #include <Screen.h>
 #include <ScrollView.h>
 #include <Url.h>
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <map>
@@ -23,6 +24,7 @@ namespace {
 const uint32 kMsgAbout = 'abou';
 const uint32 kMsgReloadNow = 'rlnw';
 const uint32 kMsgActivityExpired = 'acex';   // "id": a finished activity leaves the display
+const uint32 kMsgSelectNowPlaying = 'slnp';  // "track": selected once the shown list is laid out
 }
 
 MainWindow::MainWindow(BRect frame)
@@ -369,6 +371,7 @@ void MainWindow::ReloadContent()
     fLastReload = system_time();
     fLibraryDirty = false;
     fToolbar->SetViewMode(CurrentViewMode());
+    fToolbar->SetViewButtonsShown(ViewModeApplies());
     if (fSource == "minidisc") {
         fCards->SetVisibleItem((int32)3);
         MiniDiscChanged();
@@ -545,10 +548,55 @@ void MainWindow::ShowAlbum(int64_t albumId)
         fShownAlbumName = album ? album->name : std::string();
         fShownAlbumMA = album && album->isMA();
     }
-    if (fSource == "artists" || fSource == "playlist")
+    if (fSource == "artists" || fSource == "playlist" || fSource == "minidisc")
         fSource = "music";
     fSidebar->Select(fSource.c_str(), 0);
     ReloadContent();
+}
+
+void MainWindow::ShowNowPlaying()
+{
+    int64_t trackId = fNowPlayingTrack;
+    if (trackId == 0)
+        return;
+    std::vector<int64_t> queue = App()->GetPlayer().QueueTracks();
+    int64_t albumId = 0;
+    std::vector<int64_t> songs;
+    {
+        Library& library = App()->GetLibrary();
+        Library::Locker locker(library);
+        const Track* playing = library.TrackById(trackId);
+        if (!playing)
+            return;
+        if (library.AlbumById(playing->albumId))
+            albumId = playing->albumId;
+        else {
+            // a song that only lives in a playlist has no library album: the songs of its
+            // album that are in the play queue stand in for it
+            std::string artist = ToLower(playing->groupingArtist()), name = ToLower(playing->album);
+            for (int64_t id : queue)
+                if (const Track* t = library.TrackById(id))
+                    if (t->albumId == 0 && t->isMA() == playing->isMA() && ToLower(t->groupingArtist()) == artist
+                        && ToLower(t->album) == name)
+                        songs.push_back(id);
+            if (std::find(songs.begin(), songs.end(), trackId) == songs.end())
+                songs = {trackId};
+        }
+    }
+    if (albumId != 0)
+        ShowAlbum(albumId);
+    else {
+        ClearDrillDown();
+        fDrillTracks = songs;
+        if (fSource == "artists" || fSource == "playlist" || fSource == "minidisc")
+            fSource = "music";
+        fSidebar->Select(fSource.c_str(), 0);
+        ReloadContent();
+    }
+    // the list may have just become visible: it scrolls to the song after the window's layout
+    BMessage select(kMsgSelectNowPlaying);
+    select.AddInt64("track", trackId);
+    PostMessage(&select);
 }
 
 int64_t MainWindow::ResolveShownAlbum(Library& library)
@@ -581,6 +629,8 @@ void MainWindow::ShowArtist(int64_t artistId)
 
 void MainWindow::SetViewMode(int mode)
 {
+    if (!ViewModeApplies())
+        return; // the menu's shortcuts while the buttons are hidden
     // playlists remember their own view, separate from the library's
     if (fSource == "playlist")
         fPlaylistViewMode = mode;
@@ -776,6 +826,12 @@ void MainWindow::MessageReceived(BMessage* message)
                 ShowAlbum(albumId);
             break;
         }
+        case kMsgShowNowPlaying:
+            ShowNowPlaying();
+            break;
+        case kMsgSelectNowPlaying:
+            fTrackList->SelectTrack(message->GetInt64("track", 0), true);
+            break;
         case kMsgShowTracks: {
             // the songs of one album inside the current playlist, opened from the cover grid
             ClearDrillDown();

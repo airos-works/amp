@@ -49,6 +49,7 @@ enum {
     kMsgShowArtist = 'shar',          // "artist" int64
     kMsgOpenArtistPage = 'arpg',      // "artist" int64: the artist on MusicBrainz, in the web browser
     kMsgShowTracks = 'shtr',          // "tracks" int64[]: open these songs as an album list
+    kMsgShowNowPlaying = 'shnp',      // the playing song in its album (a click on the display's artwork)
     kMsgSelectionChanged = 'selc',
     kMsgRowsDropped = 'rdrp',
     kMsgTrackDrag = 'trdg',           // dragged tracks: "tracks" int64[], "playlist" int64 (source)
