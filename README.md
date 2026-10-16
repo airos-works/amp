@@ -8,14 +8,14 @@ server sends audio straight to the Haiku machine.
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `4763bae` on 2026-10-16 ([all files](https://github.com/jmgasper/amp/releases/tag/latest)).
+Built automatically by air/OS CI from commit `f3696cd` on 2026-10-16 ([all files](https://github.com/jmgasper/amp/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|
-| arm64 | [amp-0.3.5.alpha-4-arm64.hpkg](https://github.com/jmgasper/amp/releases/download/latest/amp-0.3.5.alpha-4-arm64.hpkg) |
-| x86_64 | [amp-0.3.5.alpha-4-x86_64.hpkg](https://github.com/jmgasper/amp/releases/download/latest/amp-0.3.5.alpha-4-x86_64.hpkg) |
+| arm64 | [amp-0.3.5.alpha-5-arm64.hpkg](https://github.com/jmgasper/amp/releases/download/latest/amp-0.3.5.alpha-5-arm64.hpkg) |
+| x86_64 | [amp-0.3.5.alpha-5-x86_64.hpkg](https://github.com/jmgasper/amp/releases/download/latest/amp-0.3.5.alpha-5-x86_64.hpkg) |
 
-Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60206-1435-g7e8c64674d, arm64 hrev60206-1433-g1adfbe6742.
+Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60206-1454-g7af4af7708, arm64 hrev60206-1456-g7b9fb6a3e7.
 <!-- airos-ci:latest-builds:end -->
 
 ## Features
