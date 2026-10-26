@@ -108,9 +108,9 @@ Free font (fonts SIL OFL 1.1, icons CC BY 4.0, see `vendor/fontawesome`).
 
 ## Native application icon
 
-The icon was redesigned on 26 October 2026 as an original loudspeaker cabinet and music note.
+The icon was redesigned on 26 October 2026 as an original rounded loudspeaker with a flowing blue music note.
 It follows the [Haiku icon guidelines](https://www.haiku-os.org/development/icon-guidelines):
-upright edges, perspective with 2:1 front and 1:1 receding floor-contact edges,
+upright edges and restrained perspective,
 light from the upper left, darker right faces, a rightward floor shadow and
 a black silhouette outline one pixel wide at 32px. Broad details target 16px
 and 32px. The artwork is MIT-licensed and drawn directly in vectors, without
@@ -133,4 +133,4 @@ g++ -std=c++17 tools/render-icon.cpp -o /tmp/render-amp-icon -lbe -ltranslation
 The checked-in PNG preview is a native render. Check changes at 16, 32, 64 and
 128px on light and dark backgrounds before replacing the icon.
 [Artwork attribution](resources/ICON-ATTRIBUTION.md) records the files and licence.
-Package version `0.3.5~alpha-6` includes this update.
+Package version `0.3.5~alpha-7` includes this refinement.

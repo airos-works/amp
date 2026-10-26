@@ -7,57 +7,39 @@
       <stop offset="1.000" stop-color="#000000" stop-opacity="0.000"/>
     </linearGradient>
     <linearGradient id="s1" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#edce9d" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#b08757" stop-opacity="1.000"/>
+      <stop offset="0.000" stop-color="#87959d" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#3e505c" stop-opacity="1.000"/>
     </linearGradient>
-    <linearGradient id="s3" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#946c49" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#594538" stop-opacity="1.000"/>
+    <linearGradient id="s3" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2422 0.3125 -0.3125 0.2422 24.5000 30.0000)">
+      <stop offset="0.000" stop-color="#f8faec" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#a1b3b7" stop-opacity="1.000"/>
     </linearGradient>
-    <linearGradient id="s4" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#d9b781" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#a88053" stop-opacity="1.000"/>
+    <linearGradient id="s4" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2109 0.2656 -0.2656 0.2109 25.5000 32.0000)">
+      <stop offset="0.000" stop-color="#9dacaf" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#3b515e" stop-opacity="1.000"/>
     </linearGradient>
-    <linearGradient id="s5" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#cbd0bd" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#59666a" stop-opacity="1.000"/>
+    <linearGradient id="s6" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.1641 0.2266 -0.2266 0.1641 24.5000 33.5000)">
+      <stop offset="0.000" stop-color="#647b84" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#293e4e" stop-opacity="1.000"/>
     </linearGradient>
-    <linearGradient id="s7" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#9aa89c" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#414e50" stop-opacity="1.000"/>
+    <linearGradient id="s7" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.0703 0.0938 -0.0938 0.0703 21.5000 29.0000)">
+      <stop offset="0.000" stop-color="#c0d1cc" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#718b96" stop-opacity="1.000"/>
     </linearGradient>
-    <linearGradient id="s8" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#667a78" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#2d3f45" stop-opacity="1.000"/>
-    </linearGradient>
-    <linearGradient id="s9" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.2969 0.3906 -0.3906 0.2969 29.0000 31.0000)">
-      <stop offset="0.000" stop-color="#b8ccba" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#6f8989" stop-opacity="1.000"/>
-    </linearGradient>
-    <linearGradient id="s10" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.0859 0.2891 -0.2891 0.0859 47.5000 33.5000)">
-      <stop offset="0.000" stop-color="#9cdad2" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#3c8e95" stop-opacity="1.000"/>
-    </linearGradient>
-    <linearGradient id="s11" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.0703 0.0703 -0.0703 0.0703 42.5000 49.5000)">
-      <stop offset="0.000" stop-color="#8ad0c9" stop-opacity="1.000"/>
-      <stop offset="1.000" stop-color="#327a89" stop-opacity="1.000"/>
+    <linearGradient id="s8" gradientUnits="userSpaceOnUse" x1="-64" y1="0" x2="64" y2="0" gradientTransform="matrix(0.0625 0.3047 -0.3047 0.0625 44.0000 36.5000)">
+      <stop offset="0.000" stop-color="#a8d9f1" stop-opacity="1.000"/>
+      <stop offset="1.000" stop-color="#3679b7" stop-opacity="1.000"/>
     </linearGradient>
   </defs>
-  <path d="M 7.000 46.000 L 32.000 58.500 L 62.000 58.500 L 37.000 46.000 L 7.000 46.000 Z" fill="url(#s0)"/>
-  <path d="M 7.000 12.000 L 18.000 1.000 L 43.000 13.500 L 32.000 24.500 L 7.000 12.000 Z" fill="url(#s1)"/>
-  <path d="M 7.000 12.000 L 18.000 1.000 L 43.000 13.500 L 32.000 24.500 L 7.000 12.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 32.000 24.500 L 43.000 13.500 L 43.000 47.500 L 32.000 58.500 L 32.000 24.500 Z" fill="url(#s3)"/>
-  <path d="M 32.000 24.500 L 43.000 13.500 L 43.000 47.500 L 32.000 58.500 L 32.000 24.500 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 7.000 12.000 L 32.000 24.500 L 32.000 58.500 L 7.000 46.000 L 7.000 12.000 Z" fill="url(#s4)"/>
-  <path d="M 7.000 12.000 L 32.000 24.500 L 32.000 58.500 L 7.000 46.000 L 7.000 12.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 23.500 28.255 C 23.500 30.461 21.706 31.353 19.500 30.255 C 17.294 29.147 15.500 26.461 15.500 24.255 C 15.500 22.039 17.294 21.147 19.500 22.255 C 21.706 23.353 23.500 26.039 23.500 28.255 Z" fill="url(#s5)"/>
-  <path d="M 23.500 28.255 C 23.500 30.461 21.706 31.353 19.500 30.255 C 17.294 29.147 15.500 26.461 15.500 24.255 C 15.500 22.039 17.294 21.147 19.500 22.255 C 21.706 23.353 23.500 26.039 23.500 28.255 Z" fill="none" stroke="#343c3c" stroke-width="1.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 28.500 45.745 C 28.500 50.716 24.471 52.735 19.500 50.255 C 14.529 47.765 10.500 41.716 10.500 36.745 C 10.500 31.784 14.529 29.765 19.500 32.255 C 24.471 34.735 28.500 40.784 28.500 45.745 Z" fill="url(#s7)"/>
-  <path d="M 28.500 45.745 C 28.500 50.716 24.471 52.735 19.500 50.255 C 14.529 47.765 10.500 41.716 10.500 36.745 C 10.500 31.784 14.529 29.765 19.500 32.255 C 24.471 34.735 28.500 40.784 28.500 45.745 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 26.000 44.500 C 26.000 48.088 23.088 49.549 19.500 47.745 C 15.912 45.951 13.000 41.588 13.000 38.000 C 13.000 34.412 15.912 32.951 19.500 34.745 C 23.088 36.549 26.000 40.912 26.000 44.500 Z" fill="url(#s8)"/>
-  <path d="M 21.000 41.000 C 21.000 42.657 19.657 43.324 18.000 42.500 C 16.343 41.676 15.000 39.657 15.000 38.000 C 15.000 36.343 16.343 35.676 18.000 36.500 C 19.657 37.324 21.000 39.343 21.000 41.000 Z" fill="url(#s9)"/>
-  <path d="M 45.000 13.000 L 57.000 18.000 L 57.000 29.000 L 49.000 24.000 L 49.000 48.000 L 43.000 50.000 L 43.000 18.000 L 45.000 13.000 Z" fill="url(#s10)"/>
-  <path d="M 45.000 13.000 L 57.000 18.000 L 57.000 29.000 L 49.000 24.000 L 49.000 48.000 L 43.000 50.000 L 43.000 18.000 L 45.000 13.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 50.000 49.000 C 50.000 52.039 46.422 54.500 42.000 54.500 C 37.578 54.500 34.000 52.039 34.000 49.000 C 34.000 45.961 37.578 43.500 42.000 43.500 C 46.422 43.500 50.000 45.961 50.000 49.000 Z" fill="url(#s11)"/>
-  <path d="M 50.000 49.000 C 50.000 52.039 46.422 54.500 42.000 54.500 C 37.578 54.500 34.000 52.039 34.000 49.000 C 34.000 45.961 37.578 43.500 42.000 43.500 C 46.422 43.500 50.000 45.961 50.000 49.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 11.000 49.000 L 32.000 58.000 L 62.000 58.000 L 41.000 49.000 L 11.000 49.000 Z" fill="url(#s0)"/>
+  <path d="M 46.000 32.000 C 46.000 44.706 37.490 55.000 27.000 55.000 C 16.510 55.000 8.000 44.706 8.000 32.000 C 8.000 19.294 16.510 9.000 27.000 9.000 C 37.490 9.000 46.000 19.294 46.000 32.000 Z" fill="url(#s1)"/>
+  <path d="M 46.000 32.000 C 46.000 44.706 37.490 55.000 27.000 55.000 C 16.510 55.000 8.000 44.706 8.000 32.000 C 8.000 19.294 16.510 9.000 27.000 9.000 C 37.490 9.000 46.000 19.294 46.000 32.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 41.000 30.000 C 41.000 42.147 32.941 52.000 23.000 52.000 C 13.059 52.000 5.000 42.147 5.000 30.000 C 5.000 17.853 13.059 8.000 23.000 8.000 C 32.941 8.000 41.000 17.853 41.000 30.000 Z" fill="url(#s3)"/>
+  <path d="M 41.000 30.000 C 41.000 42.147 32.941 52.000 23.000 52.000 C 13.059 52.000 5.000 42.147 5.000 30.000 C 5.000 17.853 13.059 8.000 23.000 8.000 C 32.941 8.000 41.000 17.853 41.000 30.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 38.500 31.000 C 38.500 40.941 32.010 49.000 24.000 49.000 C 15.990 49.000 9.500 40.941 9.500 31.000 C 9.500 21.059 15.990 13.000 24.000 13.000 C 32.010 13.000 38.500 21.059 38.500 31.000 Z" fill="url(#s4)"/>
+  <path d="M 38.500 31.000 C 38.500 40.941 32.010 49.000 24.000 49.000 C 15.990 49.000 9.500 40.941 9.500 31.000 C 9.500 21.059 15.990 13.000 24.000 13.000 C 32.010 13.000 38.500 21.059 38.500 31.000 Z" fill="none" stroke="#52646b" stroke-width="1.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 35.500 32.000 C 35.500 39.735 30.353 46.000 24.000 46.000 C 17.647 46.000 12.500 39.735 12.500 32.000 C 12.500 24.265 17.647 18.000 24.000 18.000 C 30.353 18.000 35.500 24.265 35.500 32.000 Z" fill="url(#s6)"/>
+  <path d="M 26.500 29.000 C 26.500 32.314 24.265 35.000 21.500 35.000 C 18.735 35.000 16.500 32.314 16.500 29.000 C 16.500 25.686 18.735 23.000 21.500 23.000 C 24.265 23.000 26.500 25.686 26.500 29.000 Z" fill="url(#s7)"/>
+  <path d="M 43.000 17.000 C 46.000 20.000 48.000 20.000 54.000 22.000 C 60.000 26.000 59.000 30.000 54.000 35.000 C 54.000 35.000 53.000 30.000 48.000 27.000 L 48.000 47.000 C 48.000 47.000 49.000 53.000 40.000 56.000 C 34.000 59.000 31.000 57.000 31.000 51.000 C 31.000 46.000 34.000 44.000 43.000 44.000 L 43.000 17.000 Z" fill="url(#s8)"/>
+  <path d="M 43.000 17.000 C 46.000 20.000 48.000 20.000 54.000 22.000 C 60.000 26.000 59.000 30.000 54.000 35.000 C 54.000 35.000 53.000 30.000 48.000 27.000 L 48.000 47.000 C 48.000 47.000 49.000 53.000 40.000 56.000 C 34.000 59.000 31.000 57.000 31.000 51.000 C 31.000 46.000 34.000 44.000 43.000 44.000 L 43.000 17.000 Z" fill="none" stroke="#151719" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

@@ -1,5 +1,5 @@
 name amp
-version 0.3.5~alpha-6
+version 0.3.5~alpha-7
 architecture x86_64
 summary "Music player for local libraries and Music Assistant, styled after iTunes 8"
 description "Amp plays MP3, MP4/AAC, FLAC, WAV and OGG files from local folders and streams tracks from a Music Assistant server, registering itself as a Sendspin player. It reads tags with TagLib, caches album and artist artwork from embedded pictures, folder art, MusicBrainz/Cover Art Archive, TheAudioDB and Discogs, offers album, artist and playlist browsing with playlists that can be mirrored to Music Assistant, and writes playlists and albums to a MiniDisc through a NetMD recorder."

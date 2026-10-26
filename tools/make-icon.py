@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Original Haiku loudspeaker cabinet and music note. MIT licence; no traced artwork."""
-from icon_art import Drawing, INK, plane
+"""Original Haiku rounded loudspeaker and flowing blue eighth note. MIT licence."""
+from icon_art import Drawing, INK
 
 d = Drawing()
-p = plane(7, 12)
-project=lambda point: p([point])[0]
-d.shadow([(7,46),(32,58.5),(62,58.5),(37,46)])
-# Cabinet: the floor-contact edges use the 2:1 front / 1:1 right perspective.
-d.shape([(7,12),(18,1),(43,13.5),(32,24.5)],d.gradient('edce9d','b08757'),INK)
-d.shape([(32,24.5),(43,13.5),(43,47.5),(32,58.5)],d.gradient('946c49','594538'),INK)
-d.shape(p([(0,0),(25,0),(25,34),(0,34)]),d.gradient('d9b781','a88053'),INK)
-# A tweeter and one large cone keep the speaker recognizable at 16px.
-d.ellipse(12.5,8,4,4,d.gradient('cbd0bd','59666a'),'343c3c',1.4,project)
-d.ellipse(12.5,23,9,9,d.gradient('9aa89c','414e50'),INK,1.7,project)
-d.ellipse(12.5,23,6.5,6.5,d.gradient('667a78','2d3f45'),None,2,project)
-d.ellipse(11,22,3,3,d.gradient('b8ccba','6f8989'),None,2,project)
-# A single teal eighth note is a flat, high-contrast music symbol.
-d.shape([(45,13),(57,18),(57,29),(49,24),(49,48),(43,50),(43,18)],
-        d.gradient('9cdad2','3c8e95',(42,15),(53,52)),INK)
-d.ellipse(42,49,8,5.5,d.gradient('8ad0c9','327a89',(38,45),(47,54)),INK)
+d.shadow([(11,49),(32,58),(62,58),(41,49)])
+# A shallow circular speaker, with a lit metal rim and a dark, recessed cone.
+d.ellipse(27,32,19,23,d.gradient('87959d','3e505c'),INK)
+d.ellipse(23,30,18,22,d.gradient('f8faec','a1b3b7',(9,10),(40,50)),INK)
+d.ellipse(24,31,14.5,18,d.gradient('9dacaf','3b515e',(12,15),(39,49)),'52646b',1)
+d.ellipse(24,32,11.5,14,d.gradient('647b84','293e4e',(14,19),(35,48)))
+d.ellipse(21.5,29,5,6,d.gradient('c0d1cc','718b96',(17,23),(26,35)))
+# One continuous note silhouette avoids separate blocky stem/head pieces.
+d.shape([
+    ((43,17),(43,17),(46,20)),
+    ((54,22),(48,20),(60,26)),
+    ((54,35),(59,30),(54,35)),
+    ((48,27),(53,30),(48,27)),
+    (48,47),
+    ((40,56),(49,53),(34,59)),
+    ((31,51),(31,57),(31,46)),
+    ((43,44),(34,44),(43,44)),
+],d.gradient('a8d9f1','3679b7',(40,17),(48,56)),INK)
 d.save(__file__, 'resources/branding/amp-icon.hvif')
