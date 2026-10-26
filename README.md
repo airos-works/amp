@@ -109,6 +109,7 @@ Free font (fonts SIL OFL 1.1, icons CC BY 4.0, see `vendor/fontawesome`).
 ## Native application icon
 
 The icon was redesigned on 26 October 2026 as an original rounded loudspeaker with a flowing blue music note.
+Its metal flange, rubber surround, recessed cone and domed center cap make the speaker recognizable.
 It follows the [Haiku icon guidelines](https://www.haiku-os.org/development/icon-guidelines):
 upright edges and restrained perspective,
 light from the upper left, darker right faces, a rightward floor shadow and

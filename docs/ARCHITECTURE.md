@@ -69,7 +69,8 @@ and `icons::DrawGlyph` scale them by averaging, because the pictures are several
 than they are shown. The application icon is an original rounded loudspeaker with a
 flowing blue music note. `tools/make-icon.py` defines its geometry directly on the
 64-unit Haiku canvas and writes the native HVIF plus a matching SVG. The speaker
-has a shallow metal rim and recessed cone; the note has one continuous curved
+has a metal mounting flange, rolled rubber surround, recessed cone and domed
+dust cap; the note has one continuous curved
 silhouette. A two-unit black outline, upper-left lighting and a rightward shadow
 keep the icon legible at 16 and 32 pixels. It has no bitmap input.
 `tools/render-icon.cpp` produces authoritative PNG previews using Haiku's

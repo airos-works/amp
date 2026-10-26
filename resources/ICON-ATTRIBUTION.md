@@ -2,7 +2,7 @@
 
 Redesigned and refined following visual review on 2026-10-26. All artwork is contributor-original and licensed under
 this project's [MIT licence](../LICENSE). No external visual assets or fonts
-are used by the generator. The current design is a rounded loudspeaker with a flowing blue music note. Paths below are relative to `resources/`.
+are used by the generator. The current design is a rounded loudspeaker with a metal mounting flange, rubber surround, recessed cone, domed dust cap and a flowing blue music note. Paths below are relative to `resources/`.
 
 | File | Author | Source | Licence |
 | --- | --- | --- | --- |
