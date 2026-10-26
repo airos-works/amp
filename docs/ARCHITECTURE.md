@@ -66,11 +66,13 @@ The MiniDisc cartridge is artwork, not a glyph: `resources/images/minidisc.png` 
 the MiniDisc view and the display) and `minidisc-glyph.png` (one colour, tinted like a glyph
 for the sidebar and the status bar) are PNG resources of the application. `icons::DrawPicture`
 and `icons::DrawGlyph` scale them by averaging, because the pictures are several times larger
-than they are shown. The application icon, a chrome loudspeaker with a glossy blue note in
-front of it, is a vector drawing: `tools/make-icon.py` builds the HVIF from ellipses fitted to
-`resources/branding/source/amp-icon.png` and gradients sampled from it, traces the note, and
-keeps the screws, highlights and the note's shadow for 32 or 64 pixels and up (level of detail).
-`make-icon.py --import picture.png` turns new artwork on a white background into that source.
+than they are shown. The application icon is an original wooden loudspeaker cabinet
+with a teal music note. `tools/make-icon.py` defines its geometry directly on the
+64-unit Haiku canvas and writes the native HVIF plus a matching SVG. Floor-contact
+edges use Haiku's 2:1 / 1:1 perspective; a two-unit black silhouette outline,
+upper-left lighting and a rightward shadow keep it legible at 16 and 32 pixels.
+It has no bitmap input. `tools/render-icon.cpp` produces authoritative PNG previews
+using Haiku's `BIconUtils`; `resources/ICON-ATTRIBUTION.md` records the MIT artwork.
 
 Covers (grid, album list, artists view) and the artist picture lie on a soft shadow
 (`DrawArtworkOnPage`, which calls `DrawSoftShadow`): a black picture whose alpha is the blurred

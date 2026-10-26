@@ -80,8 +80,8 @@ The development VM workflow (sync sources, build, screenshots) is described in
 tests in `docs/MINIDISC.md`. `make check` runs the core unit tests, `make mdtool` builds a
 command-line NetMD tool and `make scantool` one that times the library scanner on real
 folders (`build-haiku/scantool [-j workers] folder...`, with a scratch library). `make icon`
-rebuilds the application icon and the pictures in `resources/images` from the artwork in
-`resources/branding/source` (Python 3 with Pillow). `tools/ws.sh` and `tools/ws-build.sh` do for the owner's
+rebuilds the vector application icon and prepares the MiniDisc pictures in
+`resources/images` from `resources/branding/source` (Python 3 with Pillow). `tools/ws.sh` and `tools/ws-build.sh` do for the owner's
 workstation (a bare-metal Haiku machine with the test recorder) what `tools/haiku.sh` and
 `tools/sync-build.sh` do for the VM.
 
@@ -105,3 +105,32 @@ without a real installation.
 
 MIT. Bundles the nlohmann JSON library (MIT, see `vendor/nlohmann`) and the Font Awesome 6
 Free font (fonts SIL OFL 1.1, icons CC BY 4.0, see `vendor/fontawesome`).
+
+## Native application icon
+
+The icon was redesigned on 26 October 2026 as an original loudspeaker cabinet and music note.
+It follows the [Haiku icon guidelines](https://www.haiku-os.org/development/icon-guidelines):
+upright edges, perspective with 2:1 front and 1:1 receding floor-contact edges,
+light from the upper left, darker right faces, a rightward floor shadow and
+a black silhouette outline one pixel wide at 32px. Broad details target 16px
+and 32px. The artwork is MIT-licensed and drawn directly in vectors, without
+fonts, traced bitmaps or vendor artwork.
+
+```sh
+python3 tools/make-icon.py
+```
+
+This regenerates `resources/branding/amp-icon.hvif` and its matching `.svg`.
+The `.rdef` imports the HVIF for the app, Tracker and Deskbar. Optional positional
+arguments select an output HVIF and a host preview PNG (the latter needs Pillow).
+For authoritative previews on Haiku, use the same native renderer as Tracker:
+
+```sh
+g++ -std=c++17 tools/render-icon.cpp -o /tmp/render-amp-icon -lbe -ltranslation
+/tmp/render-amp-icon resources/branding/amp-icon.hvif resources/branding/amp-icon-preview.png 256
+```
+
+The checked-in PNG preview is a native render. Check changes at 16, 32, 64 and
+128px on light and dark backgrounds before replacing the icon.
+[Artwork attribution](resources/ICON-ATTRIBUTION.md) records the files and licence.
+Package version `0.3.5~alpha-6` includes this update.
