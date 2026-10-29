@@ -166,24 +166,20 @@ void MainWindow::StartMiniDiscWrite(BMessage* request)
     if (ids.empty())
         return;
 
-    // 2. local files only; streamed songs have no file to read
+    // 2. the songs whose files are there
     struct Candidate {
         MiniDiscWriteItem item;
         BString display;
         std::string artist, album, albumArtist;
     };
     std::vector<Candidate> candidates;
-    int streamed = 0, missing = 0;
+    int missing = 0;
     {
         Library::Locker locker(library);
         for (int64_t trackId : ids) {
             const Track* track = library.TrackById(trackId);
             if (!track)
                 continue;
-            if (track->isMA()) {
-                streamed++;
-                continue;
-            }
             if (!BEntry(track->uri.c_str()).Exists()) {
                 missing++;
                 continue;
@@ -201,23 +197,15 @@ void MainWindow::StartMiniDiscWrite(BMessage* request)
     }
     if (candidates.empty()) {
         BString text("None of these songs can be written to a MiniDisc.");
-        if (streamed)
-            text << "\n\nSongs streamed from Music Assistant have no local file for Amp to record.";
         if (missing)
             text << "\n\nThe files of " << SongCount(missing) << " could not be found.";
         Inform("MiniDisc", text, B_WARNING_ALERT);
         return;
     }
-    if (streamed || missing) {
+    if (missing) {
         BString text;
-        int skipped = streamed + missing;
-        text << skipped << " of " << (int)(skipped + candidates.size()) << " songs cannot be written to a MiniDisc";
-        if (streamed && !missing)
-            text << ": they are streamed from Music Assistant and have no local file.";
-        else if (missing && !streamed)
-            text << ": their files could not be found.";
-        else
-            text << ": they are streamed from Music Assistant or their files are missing.";
+        text << missing << " of " << (int)(missing + candidates.size()) << " songs cannot be written to a MiniDisc"
+            << ": their files could not be found.";
         text << "\n\nAmp can write the other " << SongCount((int)candidates.size()) << ".";
         BAlert* alert = new BAlert("MiniDisc", text.String(), "Cancel", "Continue", nullptr, B_WIDTH_AS_USUAL, B_INFO_ALERT);
         alert->SetShortcut(0, B_ESCAPE);

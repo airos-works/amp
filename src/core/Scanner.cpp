@@ -136,7 +136,6 @@ bool Scanner::ReadTrack(const std::string& path, int64_t size, int64_t modified,
 {
     if (!IsAudioFile(path))
         return false;
-    track.source = Source::Local;
     track.uri = path;
     track.sizeBytes = size;
     track.modifiedTime = modified;

@@ -1,4 +1,4 @@
-// Settings: library folders, Music Assistant connection, artwork sources.
+// Settings: library folders, artwork sources.
 #pragma once
 #include "core/Settings.h"
 #include <Button.h>
@@ -23,25 +23,16 @@ private:
     void Apply();
     void RefreshFolders();
     void RefreshSources();
-    void TestConnection();
 
     SettingsData fData;
     BListView* fFolders;
     BFilePanel* fFolderPanel = nullptr;
-    BCheckBox* fMAEnabled;
-    BTextControl* fMAHost;
-    BTextControl* fMAPort;
-    BTextControl* fMAUser;
-    BTextControl* fMAPassword;
-    BTextControl* fMAPlayerName;
-    BStringView* fMAStatus;
     BCheckBox* fOnlineArt;
     BListView* fSources;
     std::vector<BCheckBox*> fSourceChecks;
     BTextControl* fAudioDbKey;
     BTextControl* fDiscogsToken;
     BStringView* fCacheInfo;
-    BButton* fTestButton;
 };
 
 } // namespace amp

@@ -7,7 +7,6 @@
 #include <MenuItem.h>
 #include <Message.h>
 #include <PopUpMenu.h>
-#include <Region.h>
 #include <ScrollBar.h>
 #include <Window.h>
 #include <algorithm>
@@ -17,7 +16,6 @@
 namespace amp {
 
 namespace {
-const uint32 kMsgLoadingTick = 'ldtk';
 enum { kFieldIndicator = 0, kFieldNumber, kFieldName, kFieldTime, kFieldArtist, kFieldAlbum, kFieldQuality, kFieldYear };
 const float kArtColumnWidth = 176.0f;
 const float kGroupMinHeight = 182.0f;
@@ -44,85 +42,8 @@ TrackListView::TrackListView(const char* name)
 void TrackListView::AttachedToWindow()
 {
     BView::AttachedToWindow();
-    if (fLoading && !fLoadingRunner) {
-        BMessage tick(kMsgLoadingTick);
-        fLoadingRunner = new BMessageRunner(BMessenger(this), &tick, 40000);
-    }
     LayoutColumns();
     UpdateScrollBar();
-}
-
-void TrackListView::DetachedFromWindow()
-{
-    delete fLoadingRunner;
-    fLoadingRunner = nullptr;
-    BView::DetachedFromWindow();
-}
-
-void TrackListView::SetLoading(bool loading, const char* text)
-{
-    if (text)
-        fLoadingText = text;
-    if (loading == fLoading) {
-        if (loading)
-            Invalidate();
-        return;
-    }
-    fLoading = loading;
-    delete fLoadingRunner;
-    fLoadingRunner = nullptr;
-    if (fLoading && Window()) {
-        BMessage tick(kMsgLoadingTick);
-        fLoadingRunner = new BMessageRunner(BMessenger(this), &tick, 40000);
-    }
-    Invalidate();
-}
-
-BRect TrackListView::LoadingBarRect() const
-{
-    BRect bounds = Bounds();
-    float width = std::min(320.0f, bounds.Width() - 80);
-    float left = bounds.left + (bounds.Width() - width) / 2;
-    float top = bounds.top + 62;
-    return BRect(floorf(left), top, floorf(left + width), top + 11);
-}
-
-void TrackListView::DrawLoading(BRect bounds)
-{
-    BFont font(be_plain_font);
-    font.SetSize(13);
-    SetFont(&font);
-    SetHighColor(theme::kListSecondaryText);
-    DrawTruncated(this, fLoadingText.IsEmpty() ? "Loading…" : fLoadingText.String(),
-        BRect(bounds.left + 20, bounds.top + 28, bounds.right - 20, bounds.top + 52),
-        B_ALIGN_CENTER, 0);
-    // indeterminate "barber pole" in the iTunes blue
-    BRect bar = LoadingBarRect();
-    SetHighColor(0, 0, 0, 30);
-    SetDrawingMode(B_OP_ALPHA);
-    FillRoundRect(bar.OffsetByCopy(0, 1), 6, 6);
-    SetDrawingMode(B_OP_COPY);
-    FillRoundGradient(this, bar, 6, Rgb(120, 170, 235), Rgb(70, 125, 215));
-    BRegion clip;
-    BRect inner = bar.InsetByCopy(1, 1);
-    clip.Include(inner);
-    ConstrainClippingRegion(&clip);
-    SetHighColor(255, 255, 255, 95);
-    SetDrawingMode(B_OP_ALPHA);
-    const float stripe = 12, period = 24;
-    float offset = fmodf(fLoadingPhase, period);
-    for (float x = inner.left - period - inner.Height() + offset; x < inner.right + period; x += period) {
-        BPoint points[4] = {BPoint(x, inner.bottom + 1), BPoint(x + inner.Height() + 1, inner.top - 1),
-            BPoint(x + inner.Height() + 1 + stripe, inner.top - 1), BPoint(x + stripe, inner.bottom + 1)};
-        FillPolygon(points, 4);
-    }
-    // soft gloss on the upper half
-    SetHighColor(255, 255, 255, 50);
-    FillRect(BRect(inner.left, inner.top, inner.right, inner.top + inner.Height() / 2 - 1));
-    SetDrawingMode(B_OP_COPY);
-    ConstrainClippingRegion(nullptr);
-    SetHighColor(52, 96, 176);
-    StrokeRoundRect(bar, 6, 6);
 }
 
 void TrackListView::MakeFocus(bool focus)
@@ -166,14 +87,6 @@ void TrackListView::SetTracks(const std::vector<int64_t>& ids, int mode, int64_t
 int32 TrackListView::PositionOfRow(int row) const
 {
     return (row >= 0 && row < (int)fPositions.size()) ? fPositions[row] : row;
-}
-
-void TrackListView::SetNowPlayingQuality(int streamQuality)
-{
-    if (streamQuality == fNowQuality)
-        return;
-    fNowQuality = streamQuality;
-    Invalidate();
 }
 
 void TrackListView::SetNowPlaying(int64_t trackId, PlayerState state)
@@ -239,7 +152,7 @@ void TrackListView::Relayout()
                 return false;
             if (a->albumId != 0 || b->albumId != 0)
                 return a->albumId == b->albumId;
-            return a->source == b->source && ToLower(a->album) == ToLower(b->album)
+            return ToLower(a->album) == ToLower(b->album)
                 && ToLower(a->groupingArtist()) == ToLower(b->groupingArtist());
         };
         for (size_t i = 0; i < fTracks.size(); i++) {
@@ -257,23 +170,20 @@ void TrackListView::Relayout()
                 group.top = y;
                 group.height = 0;
                 group.year = 0;
-                group.isMA = false;
                 const Album* album = track ? library.AlbumById(track->albumId) : nullptr;
                 if (album) {
                     group.name = album->name;
                     group.artist = album->artist;
                     group.artKey = album->art;
                     group.year = album->year;
-                    group.isMA = album->isMA();
                 } else if (track) {
-                    // an album that only exists inside this playlist
+                    // a song the index has no album for yet
                     group.name = track->album.empty() ? "Unknown Album" : track->album;
                     group.artist = track->groupingArtist().empty() ? "Unknown Artist" : track->groupingArtist();
                     group.artKey = track->art.empty() ? MakeAlbumArtKey(group.artist, group.name) : track->art;
                     group.year = track->year;
-                    group.isMA = track->isMA();
                 }
-                if (track && !track->isMA())
+                if (track)
                     group.localHint = track->uri;
                 fGroups.push_back(group);
             }
@@ -407,10 +317,7 @@ BString TrackListView::CellText(const Track& track, int field) const
         case kFieldAlbum:
             return track.album.c_str();
         case kFieldQuality:
-            // same wording as the now playing display; the playing track uses the figure the
-            // server reports for the running stream when there is one
-            if (track.id == fNowPlaying && fNowState != kStopped && fNowQuality != 0)
-                return QualityLabel(fNowQuality < 0, fNowQuality).c_str();
+            // same wording as the now playing display
             return QualityLabel(track.lossless, track.bitrate).c_str();
         case kFieldYear:
             return track.year > 0 ? BString() << track.year : BString();
@@ -496,13 +403,7 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
         }
         BString value = CellText(*track, c.field);
         SetHighColor(text);
-        if (c.field == kFieldName && track->isMA()) {
-            float badgeWidth = 26;
-            DrawTruncated(this, value.String(), BRect(cell.left, cell.top, cell.right - badgeWidth, cell.bottom), c.align, 4);
-            float textWidth = std::min(StringWidth(value.String()) + 8, cell.Width() - badgeWidth);
-            DrawMABadge(this, BPoint(cell.left + textWidth + 2, cell.top + 3), 11);
-        } else
-            DrawTruncated(this, value.String(), cell, c.align, 4);
+        DrawTruncated(this, value.String(), cell, c.align, 4);
     }
 }
 
@@ -516,8 +417,6 @@ void TrackListView::DrawGroup(const Group& group, BRect rect)
     BBitmap* bitmap = App()->Art().Get(group.artKey, (int)kArtSize, &request);
     // the cover lies on the page like in the grid: a soft shadow, not a grey block
     DrawArtworkOnPage(this, bitmap, art);
-    if (group.isMA)
-        DrawMABadge(this, BPoint(art.left + 4, art.top + 4), 12);
     BFont bold(be_bold_font);
     bold.SetSize(12);
     SetFont(&bold);
@@ -554,15 +453,11 @@ void TrackListView::Draw(BRect updateRect)
     SetHighColor(theme::kListBackground);
     FillRect(updateRect);
     if (fTracks.empty()) {
-        if (fLoading)
-            DrawLoading(bounds);
-        else {
-            BFont font(be_plain_font);
-            font.SetSize(14);
-            SetFont(&font);
-            SetHighColor(theme::kListSecondaryText);
-            DrawTruncated(this, fEmptyText.String(), BRect(bounds.left, bounds.top + 24, bounds.right, bounds.top + 54), B_ALIGN_CENTER, 0);
-        }
+        BFont font(be_plain_font);
+        font.SetSize(14);
+        SetFont(&font);
+        SetHighColor(theme::kListSecondaryText);
+        DrawTruncated(this, fEmptyText.String(), BRect(bounds.left, bounds.top + 24, bounds.right, bounds.top + 54), B_ALIGN_CENTER, 0);
         return;
     }
     Library::Locker locker(App()->GetLibrary());
@@ -913,13 +808,6 @@ void TrackListView::StartDrag(BPoint where)
 
 void TrackListView::MessageReceived(BMessage* message)
 {
-    if (message->what == kMsgLoadingTick) {
-        if (fLoading && fTracks.empty()) {
-            fLoadingPhase += 1.5f;
-            Invalidate(LoadingBarRect().InsetByCopy(-2, -2));
-        }
-        return;
-    }
     if (message->WasDropped() && message->what == kMsgTrackDrag) {
         BPoint where = ConvertFromScreen(message->DropPoint());
         // an exact position only exists in the unfiltered list view; otherwise songs are appended
@@ -1089,7 +977,7 @@ void TrackListView::ShowContextMenu(int row, BPoint where)
         Library::Locker locker(library);
         for (int64_t id : library.AllPlaylistIds()) {
             const Playlist* playlist = library.PlaylistById(id);
-            if (!playlist || playlist->isMA())
+            if (!playlist)
                 continue;
             BMessage* add = withTracks(kMsgAddToPlaylist);
             add->AddInt64("playlist", id);

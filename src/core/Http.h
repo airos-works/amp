@@ -1,4 +1,4 @@
-// Small libcurl wrapper used for the Music Assistant API and artwork downloads.
+// Small libcurl wrapper used for artwork lookups and downloads.
 #pragma once
 #include <string>
 #include <vector>
@@ -18,8 +18,6 @@ public:
     static void GlobalInit();
     static HttpResponse Get(const std::string& url, const std::vector<std::string>& headers = {},
         int timeoutSeconds = 20);
-    static HttpResponse Post(const std::string& url, const std::string& body,
-        const std::vector<std::string>& headers = {}, int timeoutSeconds = 20);
     static std::string UrlEncode(const std::string& text);
     static std::string UserAgent();
 };

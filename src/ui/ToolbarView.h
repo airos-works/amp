@@ -11,13 +11,13 @@ namespace amp {
 
 class ToolbarView : public BView {
 public:
-    // Something besides the playing song that the display follows: a MiniDisc write, a
-    // library scan, a Music Assistant sync. With more than one thing to show, the display
+    // Something besides the playing song that the display follows: a MiniDisc write or a
+    // library scan. With more than one thing to show, the display
     // gets pages (iTunes' status display): the arrow next to the artwork, the dots below it
     // or a click on the text turns to another.
-    enum ActivityKind { kActivityMiniDisc, kActivityScan, kActivitySync };
+    enum ActivityKind { kActivityMiniDisc, kActivityScan };
     struct Activity {
-        BString id;                    // "minidisc", "scan", "ma-sync"
+        BString id;                    // "minidisc", "scan"
         ActivityKind kind = kActivityMiniDisc; // the picture on the left
         BString headline, detail;
         float fraction = -1;           // overall progress; below zero the bar animates
@@ -38,7 +38,7 @@ public:
     void ShowPage(const char* id);
 
     void SetPlayerState(PlayerState state);
-    void SetTrackInfo(const BString& title, const BString& artist, const BString& album, bool isMA);
+    void SetTrackInfo(const BString& title, const BString& artist, const BString& album);
     // Artwork of the playing track (key plus the request used to fetch it when missing).
     void SetArtwork(const ArtRequest& request);
     // "Lossless", "320 kbps" or empty.
@@ -50,7 +50,6 @@ public:
     // The view buttons pick how songs are listed; the albums, artists and MiniDisc views have
     // a layout of their own and hide them.
     void SetViewButtonsShown(bool shown);
-    void SetLoadingText(const BString& text);
     BTextControl* SearchField() { return fSearch; }
 
     void AttachedToWindow() override;
@@ -92,10 +91,9 @@ private:
 
     BTextControl* fSearch;
     PlayerState fState = kStopped;
-    BString fTitle, fArtist, fAlbum, fLoading, fQuality;
+    BString fTitle, fArtist, fAlbum, fQuality;
     ArtRequest fArt;
     BRect fArtRect;
-    bool fIsMA = false;
     int64_t fPosition = 0, fDuration = 0;
     float fVolume = 0.8f;
     int fViewMode = 0;

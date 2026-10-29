@@ -3,7 +3,6 @@
 #pragma once
 #include "core/Model.h"
 #include "player/Messages.h"
-#include <MessageRunner.h>
 #include <String.h>
 #include <View.h>
 #include <set>
@@ -30,8 +29,6 @@ public:
     void SetTracks(const std::vector<int64_t>& ids, int mode, int64_t playlistId,
         const std::vector<int32>& positions = std::vector<int32>());
     void SetNowPlaying(int64_t trackId, PlayerState state);
-    // Quality of the running stream (0 unknown, -1 lossless, else kbit/s) for the playing row.
-    void SetNowPlayingQuality(int streamQuality);
     std::vector<int64_t> SelectedTracks() const;
     std::vector<int32> SelectedPositions() const;
     void SelectTrack(int64_t trackId, bool scrollTo);
@@ -40,9 +37,6 @@ public:
     int64_t PlaylistId() const { return fPlaylistId; }
     void Refresh() { Invalidate(); }
     void SetEmptyText(const char* text) { fEmptyText = text; }
-    // While loading and empty, the list shows an animated progress bar instead of the empty text.
-    void SetLoading(bool loading, const char* text = nullptr);
-    void DetachedFromWindow() override;
 
     void AttachedToWindow() override;
     void Draw(BRect updateRect) override;
@@ -75,7 +69,6 @@ private:
         float height;
         std::string name, artist, artKey, localHint;
         int year;
-        bool isMA;
     };
     void Relayout();
     void UpdateScrollBar();
@@ -113,7 +106,6 @@ private:
     int fFocusRow = -1;
     int64_t fNowPlaying = 0;
     PlayerState fNowState = kStopped;
-    int fNowQuality = 0;
     int fSortField = -1;
     bool fSortAscending = true;
     BPoint fClickPoint;
@@ -127,12 +119,6 @@ private:
     std::vector<int32> fPositions;
     int32 PositionOfRow(int row) const;
     bool CanReorder() const { return fPlaylistId != 0 && fMode == kPlain && fPositions.empty(); }
-    bool fLoading = false;
-    BString fLoadingText;
-    float fLoadingPhase = 0;
-    BMessageRunner* fLoadingRunner = nullptr;
-    BRect LoadingBarRect() const;
-    void DrawLoading(BRect bounds);
 
     TrackHeaderView* fHeaderView = nullptr;
 };

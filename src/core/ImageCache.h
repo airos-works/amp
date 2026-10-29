@@ -1,5 +1,5 @@
-// Disk cache for artwork with a background fetcher (Music Assistant image proxy, folder art,
-// online providers). Images are stored as downloaded; scaling happens in the UI layer.
+// Disk cache for artwork with a background fetcher (online providers; the scanner stores
+// embedded and folder art). Images are stored as downloaded; scaling happens in the UI layer.
 #pragma once
 #include "Model.h"
 #include "Settings.h"
@@ -33,10 +33,8 @@ public:
     // True when a lookup already failed recently; no point in requesting again.
     bool KnownMissing(const ArtKey& key);
     bool Store(const ArtKey& key, const std::string& bytes, const std::string& mime);
-    // Queue a fetch. Front requests (items visible right now) are served first; asking again
-    // for a key that is already queued moves it to the front. Direct downloads (Music
-    // Assistant image proxy, remote URLs) run on their own workers so that slow online
-    // lookups never hold them up.
+    // Queue an online lookup. Front requests (items visible right now) are served first;
+    // asking again for a key that is already queued moves it to the front.
     void Request(const ArtRequest& request, bool front = true);
     void ClearAll();
     int64_t CacheSizeBytes();
@@ -45,11 +43,9 @@ public:
     std::function<void(const ArtKey&, const std::string& path)> onReady;
 
 private:
-    typedef std::deque<ArtRequest> Queue;
-    void RunDirect();
-    void RunOnline();
-    bool NextRequest(Queue& queue, ArtRequest& request);
-    void Enqueue(Queue& queue, const ArtRequest& request, bool front);
+    void Run();
+    bool NextRequest(ArtRequest& request);
+    void Enqueue(const ArtRequest& request, bool front);
     void Finish(const ArtRequest& request, bool ok);
     bool OnlineLookupPossible(const ArtRequest& request);
     bool FetchOnline(const ArtRequest& request);
@@ -64,9 +60,8 @@ private:
     std::mutex fMutex;
     std::unordered_map<ArtKey, std::string> fIndex;    // key -> file path
     std::unordered_map<ArtKey, int64_t> fMissing;      // key -> time of failed lookup
-    Queue fDirectQueue;                                // requests with a URL
-    Queue fOnlineQueue;                                // provider lookups
-    std::set<ArtKey> fQueued;                          // keys waiting in either queue
+    std::deque<ArtRequest> fQueue;                     // provider lookups
+    std::set<ArtKey> fQueued;                          // keys waiting in the queue
     std::set<ArtKey> fActive;                          // keys being fetched right now
     std::condition_variable fCondition;
     std::vector<std::thread> fThreads;

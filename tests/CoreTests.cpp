@@ -4,10 +4,8 @@
 #include "core/Des.h"
 #include "core/ImageCache.h"
 #include "core/Library.h"
-#include "core/MusicAssistant.h"
 #include "core/NetMD.h"
 #include "core/NetMDSimulator.h"
-#include "core/Queue.h"
 #include "core/Resampler.h"
 #include "core/Scanner.h"
 #include "core/Settings.h"
@@ -18,6 +16,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sqlite3.h>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -236,10 +235,9 @@ std::string WavFile(int seconds = 1)
     return wav;
 }
 
-Track MakeTrack(Source source, const std::string& uri, const std::string& album)
+Track MakeTrack(const std::string& uri, const std::string& album)
 {
     Track track;
-    track.source = source;
     track.uri = uri;
     track.title = uri;
     track.artist = "Artist";
@@ -248,114 +246,116 @@ Track MakeTrack(Source source, const std::string& uri, const std::string& album)
     return track;
 }
 
-void TestQueueRemoveIf()
-{
-    PlayQueue queue;
-    queue.Set({1, 2, 3, 4, 5, 6}, 3); // playing 4
-    queue.RemoveIf([](int64_t id) { return id % 2 == 0; });
-    CHECK(queue.Size() == 3);
-    CHECK(queue.Tracks() == std::vector<int64_t>({1, 3, 5}));
-    CHECK(queue.Current() == 5); // 4 went: the song after it is current
-    queue.RemoveIf([](int64_t id) { return id == 5; });
-    CHECK(queue.Current() == 3); // nothing after it: the last one left
-    queue.RemoveIf([](int64_t) { return true; });
-    CHECK(queue.Empty());
-    CHECK(queue.Current() == 0);
-
-    PlayQueue kept;
-    kept.Set({7, 8, 9}, 1);
-    kept.RemoveIf([](int64_t id) { return id == 7; });
-    CHECK(kept.Current() == 8); // a song before the current one went: the current one stays
-    kept.RemoveIf([](int64_t) { return false; });
-    CHECK(kept.Size() == 2 && kept.Current() == 8);
-}
-
-void TestClearMusicAssistant()
+// Versions up to 0.3.5~alpha-9 kept what Music Assistant served in the library: a database
+// from one of them comes back with only the local songs and playlists (#12).
+void TestMusicAssistantDataRemoved()
 {
     std::string folder = TempFolder("library");
+    std::string path = folder + "/library.db";
     {
-        Library library(folder + "/library.db");
+        sqlite3* db = nullptr;
+        CHECK(sqlite3_open(path.c_str(), &db) == SQLITE_OK);
+        const char* old = R"SQL(
+CREATE TABLE tracks (
+    id INTEGER PRIMARY KEY, source INTEGER NOT NULL DEFAULT 0, uri TEXT NOT NULL UNIQUE,
+    title TEXT, artist TEXT, album_artist TEXT, album TEXT, genre TEXT, year INTEGER,
+    track INTEGER, disc INTEGER, duration_ms INTEGER, size INTEGER, mtime INTEGER, bitrate INTEGER,
+    ma_item_id TEXT, ma_album_uri TEXT, ma_artist_uri TEXT, art TEXT, date_added INTEGER,
+    in_library INTEGER DEFAULT 1, lossless INTEGER DEFAULT 0);
+CREATE INDEX tracks_source ON tracks(source);
+CREATE TABLE playlists (
+    id INTEGER PRIMARY KEY, source INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL,
+    ma_uri TEXT, ma_item_id TEXT, sync_ma INTEGER DEFAULT 0, editable INTEGER DEFAULT 1, modified INTEGER,
+    dynamic INTEGER DEFAULT 0);
+CREATE TABLE playlist_tracks (
+    playlist_id INTEGER NOT NULL, position INTEGER NOT NULL, track_id INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, position));
+CREATE TABLE ma_albums (uri TEXT PRIMARY KEY, item_id TEXT, name TEXT, artist TEXT, year INTEGER, art TEXT);
+CREATE TABLE ma_artists (uri TEXT PRIMARY KEY, item_id TEXT, name TEXT, art TEXT);
+CREATE TABLE album_art (key TEXT PRIMARY KEY, art TEXT);
+INSERT INTO tracks (id, source, uri, title, artist, album) VALUES
+    (1, 0, '/music/a.flac', 'A', 'Artist', 'Local Album'),
+    (2, 0, '/music/b.flac', 'B', 'Artist', 'Local Album'),
+    (3, 1, 'library://track/5', 'Streamed', 'Artist', 'Streamed Album'),
+    (4, 1, 'tidal--x://track/9', 'Provider', 'Artist', 'Provider Album');
+UPDATE tracks SET in_library = 0 WHERE id = 4;
+INSERT INTO playlists (id, source, name, ma_uri, ma_item_id, sync_ma) VALUES
+    (1, 0, 'Mixed', 'library://playlist/88', '88', 1),
+    (2, 1, 'Server Playlist', 'library://playlist/77', '77', 0),
+    (3, 0, 'Plain', '', '', 0);
+INSERT INTO playlist_tracks VALUES (1, 0, 1), (1, 1, 3), (1, 2, 2), (2, 0, 3), (2, 1, 4), (3, 0, 2);
+INSERT INTO ma_albums VALUES ('library://album/1', '1', 'Streamed Album', 'Artist', 0, 'ma:1');
+INSERT INTO ma_artists VALUES ('library://artist/1', '1', 'Artist', 'ma:2');
+)SQL";
+        CHECK(sqlite3_exec(db, old, nullptr, nullptr, nullptr) == SQLITE_OK);
+        sqlite3_close(db);
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        // and once more: what was removed stays removed, and the old columns do no harm
+        Library library(path);
         std::string error;
         CHECK(library.Open(error));
-        CHECK(!library.HasMusicAssistantData());
-
-        std::vector<Track> local = {MakeTrack(Source::Local, "/music/a.flac", "Local Album"),
-            MakeTrack(Source::Local, "/music/b.flac", "Local Album")};
-        std::vector<int64_t> localIds = library.UpsertTracks(local, false);
-        MASyncResult sync;
-        for (int i = 0; i < 300; i++) {
-            Track track = MakeTrack(Source::MusicAssistant, "library://track/" + std::to_string(i), "Streamed Album");
-            track.maAlbumUri = "library://album/1";
-            sync.tracks.push_back(track);
-        }
-        Track provider = MakeTrack(Source::MusicAssistant, "tidal--x://track/9", "Provider Album");
-        provider.inLibrary = false;
-        sync.tracks.push_back(provider);
-        Album album;
-        album.maUri = "library://album/1";
-        album.maItemId = "1";
-        album.name = "Streamed Album";
-        album.artist = "Artist";
-        sync.albums.push_back(album);
-        Artist artist;
-        artist.maUri = "library://artist/1";
-        artist.maItemId = "1";
-        artist.name = "Artist";
-        sync.artists.push_back(artist);
-        Playlist remote;
-        remote.source = Source::MusicAssistant;
-        remote.name = "Server Playlist";
-        remote.maItemId = "77";
-        remote.maUri = "library://playlist/77";
-        sync.playlists.push_back(remote);
-        sync.playlistTrackUris.push_back({"library://track/1", "library://track/2"});
-        library.ApplyMASync(sync);
-        CHECK(library.HasMusicAssistantData());
-        CHECK(library.TrackCount() == 303);
-
-        int64_t streamed = 0;
+        CHECK(library.TrackCount() == (pass == 0 ? 2u : 3u));
+        CHECK(library.AllAlbumIds().size() == 1);
+        std::vector<int64_t> playlists = library.AllPlaylistIds();
+        CHECK(playlists.size() == (pass == 0 ? 2u : 3u));
         {
             Library::Locker locker(library);
-            const Track* track = library.TrackByUri("library://track/5");
-            CHECK(track != nullptr);
-            streamed = track ? track->id : 0;
+            CHECK(library.TrackByUri("library://track/5") == nullptr);
+            CHECK(library.TrackByUri("tidal--x://track/9") == nullptr);
+            CHECK(library.PlaylistById(2) == nullptr);
+            const Playlist* mixed = library.PlaylistById(1);
+            CHECK(mixed && mixed->name == "Mixed");
+            if (pass == 0)
+                CHECK(mixed && mixed->trackIds == std::vector<int64_t>({1, 2}));
+            const Playlist* plain = library.PlaylistById(3);
+            CHECK(plain && plain->trackIds == std::vector<int64_t>({2}));
         }
-        int64_t mixed = library.CreatePlaylist("Mixed");
-        library.AddToPlaylist(mixed, {localIds[0], streamed, localIds[1]});
-        library.LinkPlaylistToMA(mixed, "88", "library://playlist/88", true);
-        int64_t plain = library.CreatePlaylist("Plain");
-        library.AddToPlaylist(plain, {localIds[1]});
-
-        library.ClearMusicAssistantData();
-        CHECK(!library.HasMusicAssistantData());
-        CHECK(library.TrackCount() == 2);
-        CHECK(library.AllAlbumIds().size() == 1);
-        CHECK(library.AllPlaylistIds().size() == 2);
-        Library::Locker locker(library);
-        CHECK(library.TrackByUri("library://track/5") == nullptr);
-        CHECK(library.TrackByUri("tidal--x://track/9") == nullptr);
-        const Playlist* playlist = library.PlaylistById(mixed);
-        CHECK(playlist && playlist->trackIds == localIds);
-        CHECK(playlist && !playlist->syncToMA && playlist->maItemId.empty());
-        for (int64_t id : library.AllAlbumIds())
-            CHECK(!library.AlbumById(id)->isMA());
+        if (pass == 0) {
+            std::vector<Track> added = {MakeTrack("/music/c.flac", "Local Album")};
+            std::vector<int64_t> ids = library.UpsertTracks(added, true);
+            int64_t fresh = library.CreatePlaylist("Fresh");
+            CHECK(fresh != 0 && library.AddToPlaylist(fresh, ids));
+            library.AddToPlaylist(1, ids);
+        } else {
+            Library::Locker locker(library);
+            const Playlist* mixed = library.PlaylistById(1);
+            CHECK(mixed && mixed->trackIds.size() == 3 && mixed->trackIds[1] == 2);
+            CHECK(library.TrackByUri("/music/c.flac") != nullptr);
+        }
     }
     {
-        // and the file on disk agrees
-        Library library(folder + "/library.db");
-        std::string error;
-        CHECK(library.Open(error));
-        CHECK(!library.HasMusicAssistantData());
-        CHECK(library.TrackCount() == 2);
-        std::vector<int64_t> playlists = library.AllPlaylistIds();
-        CHECK(playlists.size() == 2);
-        Library::Locker locker(library);
-        for (int64_t id : playlists) {
-            const Playlist* playlist = library.PlaylistById(id);
-            CHECK(playlist && !playlist->isMA() && !playlist->syncToMA);
-            if (playlist && playlist->name == "Mixed")
-                CHECK(playlist->trackIds.size() == 2);
-        }
+        sqlite3* db = nullptr;
+        CHECK(sqlite3_open(path.c_str(), &db) == SQLITE_OK);
+        sqlite3_stmt* stmt = nullptr;
+        CHECK(sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('ma_albums', 'ma_artists', 'tracks_source')",
+            -1, &stmt, nullptr) == SQLITE_OK);
+        CHECK(sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int(stmt, 0) == 0);
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+    }
+    RemoveFolder(folder);
+}
+
+// Pictures fetched from a Music Assistant server ("ma:", "mau:", "map:" keys) leave the
+// artwork cache when it opens; everything else stays.
+void TestImageCacheDropsServerArt()
+{
+    std::string folder = TempFolder("art");
+    Settings settings(folder + "/settings.json");
+    std::string jpeg = std::string("\xff\xd8\xff\xe0") + std::string(124, 'x');
+    {
+        ImageCache images(folder + "/art", settings);
+        CHECK(images.Open());
+        CHECK(images.Store("ma:12", jpeg, "image/jpeg"));
+        CHECK(images.Store("map:34", jpeg, "image/jpeg"));
+        CHECK(images.Store(MakeAlbumArtKey("Artist", "Album"), jpeg, "image/jpeg"));
+    }
+    {
+        ImageCache images(folder + "/art", settings);
+        CHECK(images.Open());
+        CHECK(!images.Has("ma:12") && !images.Has("map:34"));
+        CHECK(images.Has(MakeAlbumArtKey("Artist", "Album")));
     }
     RemoveFolder(folder);
 }
@@ -369,18 +369,17 @@ void TestAlbumIdsAcrossRebuild()
         Library library(folder + "/library.db");
         std::string error;
         CHECK(library.Open(error));
-        std::vector<Track> first = {MakeTrack(Source::Local, "/music/m/1.flac", "Middle Album")};
+        std::vector<Track> first = {MakeTrack("/music/m/1.flac", "Middle Album")};
         library.UpsertTracks(first, true);
-        int64_t middle = library.AlbumIdFor("Artist", "Middle Album", false);
+        int64_t middle = library.AlbumIdFor("Artist", "Middle Album");
         CHECK(middle != 0);
         CHECK(library.AlbumById(middle) != nullptr && library.AlbumById(middle)->name == "Middle Album");
-        CHECK(library.AlbumIdFor("Artist", "Middle Album", true) == 0); // not a Music Assistant album
-        CHECK(library.AlbumIdFor("Artist", "No Such Album", false) == 0);
+        CHECK(library.AlbumIdFor("Artist", "No Such Album") == 0);
         // songs read before it in the next scan push the album to another id
-        std::vector<Track> earlier = {MakeTrack(Source::Local, "/music/a/1.flac", "Album A"),
-            MakeTrack(Source::Local, "/music/a/2.flac", "Album B")};
+        std::vector<Track> earlier = {MakeTrack("/music/a/1.flac", "Album A"),
+            MakeTrack("/music/a/2.flac", "Album B")};
         library.UpsertTracks(earlier, true);
-        int64_t again = library.AlbumIdFor("artist", "middle album", false); // the key ignores case
+        int64_t again = library.AlbumIdFor("artist", "middle album"); // the key ignores case
         CHECK(again != 0);
         CHECK(library.AlbumById(again)->name == "Middle Album");
         CHECK(library.AlbumById(again)->trackIds.size() == 1);
@@ -675,8 +674,8 @@ int main()
     TestTitles();
     TestResampler();
     TestProtocol();
-    TestQueueRemoveIf();
-    TestClearMusicAssistant();
+    TestMusicAssistantDataRemoved();
+    TestImageCacheDropsServerArt();
     TestAlbumIdsAcrossRebuild();
     TestTagStream();
     TestMp4();

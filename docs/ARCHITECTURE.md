@@ -3,19 +3,15 @@
 ```
 src/core     portable C++17 (no Haiku headers except in Scanner's TagLib use)
   Model.h            Track / Album / Artist / Playlist structs, art keys
-  Settings           JSON settings file (library folders, MA account, art sources, UI state)
+  Settings           JSON settings file (library folders, art sources, UI state)
   Library            SQLite store + in-memory index (albums/artists derived from tracks)
   Scanner            folder walk, TagLib tags, embedded/folder art, optional duration probe
   TagStream          the file access TagLib reads through: few large reads; MP4 box reader
   Workers            a handful of threads for one job (Kernel Kit threads on Haiku)
-  ImageCache         on-disk artwork cache + fetch worker (MA proxy, online providers)
+  ImageCache         on-disk artwork cache + online lookup workers
   ArtProviders       MusicBrainz/CAA, TheAudioDB, Discogs lookups
   ArtistLinks        an artist's MusicBrainz page: MBIDs seen in lookups or asked by name, cached
   Http               libcurl wrapper
-  WebSocket          minimal RFC 6455 client
-  TimeFilter         Kalman clock filter (port of the Sendspin reference)
-  Sendspin           Sendspin player@v1 client (transition mode through MA's /sendspin proxy)
-  MusicAssistant     MA HTTP API client: login, library, playlists, player/queue commands
   Queue              play queue with shuffle/repeat
   NetMD              MiniDisc recorder protocol: commands, secure download, title/capacity planning
   NetMDSimulator     a recorder in software (tests, AMP_NETMD_SIMULATE)
@@ -25,8 +21,7 @@ src/core     portable C++17 (no Haiku headers except in Scanner's TagLib use)
 src/player   Haiku Media Kit
   AudioOutput        BSoundPlayer + ring buffer + volume
   LocalDecoder       BMediaFile/BMediaTrack decode thread
-  SendspinAudio      schedules Sendspin PCM chunks into the output at their local play time
-  Player             controller: queue, engine switching, MA player registration, progress
+  Player             controller: queue, decoder, progress
   NetMDUsb           USB Kit transport and roster for NetMD recorders
   MiniDiscPcm        any local file -> 44.1 kHz 16-bit big-endian PCM for SP recording
   MiniDisc           MiniDiscManager: recorder state, write and erase jobs on one worker thread
@@ -34,17 +29,17 @@ src/quicklook  air/OS Quick Look add-on (add-ons/quick_look/Amp): LocalDecoder +
                TagLib artwork and tags in Tracker's space-bar panel; built from these sources
                as position independent code when the SDK has add-ons/quick_look/QuickLook.h
 src/ui       Haiku Interface Kit
-  App                BApplication: owns everything, background scan/sync jobs
+  App                BApplication: owns everything, the background scan
   MainWindow         toolbar / sidebar / content cards / status bar
   ToolbarView        transport, volume, LCD display (song and activity pages), view switcher, search
-  SidebarView        LIBRARY and PLAYLISTS sources, drop target, context menu
+  SidebarView        LIBRARY, DEVICES and PLAYLISTS sources, drop target, context menu
   TrackListView      table with album-grouped mode, sorting, selection, drag & drop
   AlbumGridView      album cover grid
   ArtistsView        artist list + header (links to MusicBrainz) + grouped track list
-  StatusBarView      +/shuffle/repeat, summary, MA indicator, Settings button
+  StatusBarView      +/shuffle/repeat, summary, Write to MiniDisc and Settings buttons
   Icons              Font Awesome glyphs: registers the bundled font, draws it centred;
                      the MiniDisc pictures from the resources, scaled and tinted
-  SettingsWindow     Library / Music Assistant / Artwork tabs
+  SettingsWindow     Library / Artwork tabs
   ArtStore           scaled BBitmap cache fed by ImageCache
   MiniDiscView       the DEVICES source: disc summary, capacity bar, tracks and pending songs
   MainWindowMiniDisc the write flow (questions, job) and its progress in the LCD and sidebar
@@ -92,20 +87,19 @@ The LCD display in the toolbar shows the playing song and, besides it, *activiti
 (`ToolbarView::Activity`: an id, a picture, headline, detail, a progress fraction or an
 animated bar, labels, an optional cancel command, a finished state). The window adds or
 updates them by id (`SetActivity`) and takes them away (`RemoveActivity`); today they are the
-MiniDisc write or erase (`minidisc`), the library scan (`scan`, from `kMsgScanProgress` with
-`scan` set and the scanner's file counts) and the Music Assistant library fetch (`ma-sync`,
-from `kMsgMAStatus` with `syncing`). A finished scan or sync leaves after a few seconds
+MiniDisc write or erase (`minidisc`) and the library scan (`scan`, from `kMsgScanProgress`
+with `scan` set and the scanner's file counts). A finished scan leaves after a few seconds
 (`ExpireActivity`).
 
 The pages are the song (while one is playing or paused) followed by the activities. With more
 than one page a round arrow beside the artwork and one dot per page appear; the arrow, a click
 on the text or a dot turns the page. A MiniDisc write comes to the front when it starts and
-again when it ends; the scan and the sync never push the song aside. A song that starts
+again when it ends; the scan never pushes the song aside. A song that starts
 playing is shown.
 
 A click on the song page's artwork (`kMsgShowNowPlaying`) opens the playing song's album with
-the song selected (`MainWindow::ShowNowPlaying`); a song that only lives in a playlist has no
-library album, so the songs of its album in the play queue are shown instead. The selection is
+the song selected (`MainWindow::ShowNowPlaying`); a song the index has no album for yet (a
+scan still running) shows the songs of its album in the play queue instead. The selection is
 made by a message posted after the reload, so the list scrolls to the song once the window
 has laid it out.
 
@@ -146,13 +140,13 @@ minutes; before, the same scan ran at about two songs a second.
 
 ## Threads and messaging
 
-- The scanner and its workers, image cache, art store, Sendspin client, Sendspin feeder,
-  local decoder and a progress ticker run on their own threads. They never touch views; they post BMessages
+- The scanner and its workers, image cache, art store, local decoder and a progress ticker
+  run on their own threads. They never touch views; they post BMessages
   (`player/Messages.h`) to the main window or the application.
 - `Library` is guarded by a recursive mutex; views take a `Library::Locker` while they hold
   pointers into it. Node-based containers keep those pointers stable.
-- Track completion is reported to the application looper (`kMsgTrackFinished`) so that no
-  engine is ever stopped from its own thread.
+- Track completion is reported to the application looper (`kMsgTrackFinished`) so that the
+  decoder is never stopped from its own thread.
 
 ## View modes
 
@@ -164,15 +158,15 @@ shortcuts do nothing.
 
 - The album list groups *consecutive* rows of one album (`TrackListView::Relayout`), which for
   the album-ordered library is every album once, and for a playlist keeps the playlist order.
-  Groups carry their own name, artist and art key because playlist tracks fetched from a
-  provider have no library album.
+  Groups carry their own name, artist and art key, taken from the song when it has no
+  library album.
 - The grid shows `AlbumCell`s: library albums, or for a playlist the albums found in it in
   order of first appearance, each holding only the playlist's songs of that album. Opening a
   library cell uses `kMsgShowAlbum`; a playlist cell sends its songs with `kMsgShowTracks`.
 - Album and artist ids are numbered by `Library::RebuildIndex`, afresh each time, in the
   order the songs are met; track ids are database rows and stay. A scan rebuilds the index
   every few seconds, so the window keeps the opened album by artist and name
-  (`ResolveShownAlbum`, through `Library::AlbumIdFor(artist, name, ma)`) and the artists view
+  (`ResolveShownAlbum`, through `Library::AlbumIdFor(artist, name)`) and the artists view
   keeps its selection by name (`ArtistIdFor`), finding them again after every reload.
 - Rows of an editable playlist map to playlist positions (`fPositions`) when a search filter
   hides some of them, so remove and drag act on the right entries. Drag reordering is offered
@@ -180,61 +174,26 @@ shortcuts do nothing.
 
 ## Track quality
 
-`Track::lossless` and `Track::bitrate` feed the quality label in the display. Local files get
-them from TagLib (FLAC, WAV, AIFF and ALAC-in-MP4 count as lossless; a missing bit rate is
-estimated from size and duration). Music Assistant tracks take them from the provider
-mappings' `audio_format`; MP4 containers report codec "?" there, so a bit rate of 600 kbit/s
-or more, or more than 16 bits, is read as ALAC. While a stream runs, the queue item's
-`streamdetails.audio_format` overrides the library figures. `scannerVersion` in the settings
-forces one full rescan when the scanner starts storing new fields.
+`Track::lossless` and `Track::bitrate` feed the quality label in the display. They come from
+TagLib (FLAC, WAV, AIFF and ALAC-in-MP4 count as lossless; a missing bit rate is estimated
+from size and duration). `scannerVersion` in the settings forces one full rescan when the
+scanner starts storing new fields.
 
 ## Artwork pipeline
 
 `ArtStore::Get` is called from the views' `Draw` for visible items only. A miss queues a
 request in `ImageCache`, at the front; asking again for a queued key moves it to the front,
-and each queue is capped so items scrolled past long ago fall out. Direct downloads (Music
-Assistant image proxy, remote CDN URLs) run on three workers of their own. When the server
-cannot deliver a picture (HTTP 404, typically because the provider that owns the file is
-offline) the request moves to the online lookup workers, which try the configured sources in
-order and retry multi-artist albums with the first artist alone. Failed Music Assistant keys
-are retried after 15 minutes, other misses after a week.
+and the queue is capped so items scrolled past long ago fall out. Three online lookup workers
+try the configured sources in order and retry multi-artist albums with the first artist
+alone. Misses are retried after a week.
 
-## Switching Music Assistant off
+## Music Assistant, removed
 
-`AmpApp::DisconnectMusicAssistant` stops a streamed song, closes the Sendspin client and calls
-`Library::ClearMusicAssistantData`: streamed tracks, server playlists and the album and
-artist records go, in whole-table statements. Local playlists keep their local songs; one
-that was mirrored to the server is unlinked, since a mirror would replace the server's copy
-with what is left of it. The play queue drops the songs that are gone (`DropMissingTracks`)
-and the window leaves the Music Assistant source (`kMsgMACleared`). The sidebar entry, the
-status bar indicator and the "Sync to Music Assistant" menu item are shown only while
-Music Assistant is switched on. Workers that were fetching from the server when the switch
-was turned apply their results through `WhileMAEnabled`, which refuses them. A library that
-still holds streamed content at start-up while Music Assistant is off is cleared before the
-window opens.
-
-## Music Assistant playback
-
-1. `App::ConnectMusicAssistant` logs in (`POST /auth/login`), stores the token, and calls
-   `Player::EnableMusicAssistant`, which starts the Sendspin client.
-2. The client opens `ws://host:port/sendspin`, sends `{"type":"auth","token":…}` then an
-   unencrypted `client/hello` (player@v1, PCM 16-bit 44.1/48 kHz), runs the time filter and
-   reports `client/state` with `available: true`.
-3. Music Assistant wraps the Sendspin client (a "protocol" player) in a universal player
-   that owns the queue; `MusicAssistant::ResolvePlayerId` finds it through our player's
-   `active_source`. Playing an MA track calls `player_queues/play_media` for that id; the server
-   streams PCM chunks (9-byte header: type 4 + big-endian int64 server timestamp) which
-   `SendspinAudio` schedules through the shared `AudioOutput`. `stream/end` advances the
-   Amp queue; pause/seek/stop map to `players/cmd/*`.
-4. Artwork for MA items is fetched from `/imageproxy/<proxy_id>?size=512&fmt=jpeg` and cached
-   like everything else.
-5. Server replies carry explicit nulls, so all fields are read through the type-checked
-   helpers in `MusicAssistant.cpp`; every parse path is wrapped so bad data never aborts
-   the app.
-6. Playlist contents are fetched when a playlist is opened (cached tracks show at once, a
-   refresh runs in the background). Asking the `library` pseudo provider for the tracks can
-   return nothing because the server picks the playlist's first provider mapping even when
-   that instance is gone, so `FetchLibraryPlaylistTracks` reads the mappings from
-   `music/playlists/get` and asks the available ones directly. Tracks that only exist on a
-   provider (`tidal--…://track/…`) are stored with `inLibrary = false`: playable inside the
-   playlist, hidden from the Music, Albums and Artists views.
+Amp used to stream from a Music Assistant server (a Sendspin player, the server's library
+and playlists, its image proxy). That was removed in `0.3.5~alpha-10` (#12); the code is in
+the git history before that version. What older versions stored goes when a newer one
+starts: `Library::Open` deletes the tracks and playlists with `source = 1`, the streamed songs
+in local playlists and the `ma_albums` and `ma_artists` tables (the `source` and `ma_*`
+columns of an old database stay, unused; a new database has none), `ImageCache::Open` the
+pictures under `ma:`, `mau:` and `map:` keys, and the settings file loses the server account
+the next time it is saved. A saved `selectedSource` of `ma` opens Music instead.

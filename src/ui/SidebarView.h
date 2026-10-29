@@ -1,5 +1,4 @@
-// Left source list: LIBRARY (Music, Artists, Albums, Music Assistant while it is switched on)
-// and PLAYLISTS.
+// Left source list: LIBRARY (Music, Artists, Albums), DEVICES and PLAYLISTS.
 #pragma once
 #include <String.h>
 #include <View.h>
@@ -10,15 +9,12 @@ namespace amp {
 struct SidebarPlaylist {
     int64_t id;
     BString name;
-    bool isMA;
-    bool synced;
 };
 
 class SidebarView : public BView {
 public:
     SidebarView();
     void SetPlaylists(const std::vector<SidebarPlaylist>& playlists);
-    void SetMusicAssistant(bool enabled);
     // The DEVICES section: shown while a MiniDisc recorder is connected. A fraction of zero
     // or more draws the progress pie of a running write.
     // `locked`: the disc is write-protected (a lock is drawn).
@@ -38,12 +34,10 @@ public:
 
 private:
     struct Item {
-        BString source;      // "music", "artists", "albums", "ma", "playlist" or "" for headers
+        BString source;      // "music", "artists", "albums", "minidisc", "playlist" or "" for headers
         BString label;
         int64_t playlistId = 0;
         bool header = false;
-        bool isMA = false;
-        bool synced = false;
         BRect rect;
     };
     void Rebuild();
@@ -53,7 +47,6 @@ private:
     void ShowContextMenu(int index, BPoint where);
 
     std::vector<SidebarPlaylist> fPlaylists;
-    bool fMusicAssistant = false;
     bool fMiniDiscConnected = false;
     bool fMiniDiscBusy = false;
     bool fMiniDiscLocked = false;

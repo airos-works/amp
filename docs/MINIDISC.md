@@ -18,8 +18,7 @@ sends 16-bit 44.1 kHz PCM and the recorder does the ATRAC encoding itself.
   (after the songs already there). Return picks *Add to Disc*; erasing takes a click.
 - If the songs do not fit, Amp says how long they are and how much room there is, and offers
   to **Write Songs That Fit**: the songs in order, up to the first one that does not fit.
-- Songs streamed from Music Assistant have no local file and are left out (Amp says so
-  before starting). Missing files are left out the same way.
+- Songs whose files are missing are left out (Amp says so before starting).
 - While writing, the display shows the MiniDisc, "Writing “name” to the MiniDisc", the song
   being written, overall progress and the time left, and an ✕ button. The sidebar entry shows
   a progress pie and the disc view marks each song as waiting, converting, writing or done.

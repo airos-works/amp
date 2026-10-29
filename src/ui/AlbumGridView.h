@@ -13,7 +13,6 @@ struct AlbumCell {
     int64_t albumId = 0;             // library album, or 0 for a playlist-only album
     std::string name, artist, artKey, localHint;
     int year = 0;
-    bool isMA = false;
     std::vector<int64_t> trackIds;   // the tracks this cell stands for, in play order
 };
 

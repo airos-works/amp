@@ -40,27 +40,6 @@ void FillRoundGradient(BView* view, BRect rect, float radius, rgb_color top, rgb
     view->FillRoundRect(rect, radius, radius, gradient);
 }
 
-void DrawMABadge(BView* view, BPoint leftTop, float height)
-{
-    BFont font(be_bold_font);
-    font.SetSize(height - 3);
-    BFont old;
-    view->GetFont(&old);
-    view->SetFont(&font);
-    float textWidth = view->StringWidth("MA");
-    float width = textWidth + 6;
-    BRect rect(leftTop.x, leftTop.y, leftTop.x + width, leftTop.y + height);
-    font_height fh;
-    font.GetHeight(&fh);
-    view->SetHighColor(theme::kBadgeBackground);
-    view->FillRoundRect(rect, 3, 3);
-    view->SetHighColor(theme::kBadgeText);
-    view->SetDrawingMode(B_OP_OVER);
-    view->DrawString("MA", BPoint(rect.left + (width - textWidth) / 2,
-        rect.top + (height - (fh.ascent + fh.descent)) / 2 + fh.ascent));
-    view->SetFont(&old);
-}
-
 void DrawNoteIcon(BView* view, BRect rect, rgb_color color)
 {
     // the Font Awesome music note, centred in the rect

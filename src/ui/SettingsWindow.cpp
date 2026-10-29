@@ -1,6 +1,5 @@
 #include "SettingsWindow.h"
 #include "App.h"
-#include "core/MusicAssistant.h"
 #include "player/Messages.h"
 #include <Box.h>
 #include <GroupLayout.h>
@@ -10,15 +9,14 @@
 #include <SeparatorView.h>
 #include <StringItem.h>
 #include <TabView.h>
-#include <thread>
 
 namespace amp {
 
 namespace {
 enum {
     kMsgAddFolder = 'adfo', kMsgRemoveFolder = 'rmfo', kMsgFolderChosen = 'foch', kMsgSave = 'save',
-    kMsgCancel = 'cncl', kMsgTest = 'test', kMsgTestResult = 'tsrs', kMsgSourceUp = 'srup', kMsgSourceDown = 'srdn',
-    kMsgToggleSource = 'srtg', kMsgClearCache = 'clca', kMsgSyncNow = 'sync', kMsgRescanNow = 'rscn'
+    kMsgCancel = 'cncl', kMsgSourceUp = 'srup', kMsgSourceDown = 'srdn', kMsgToggleSource = 'srtg',
+    kMsgClearCache = 'clca', kMsgRescanNow = 'rscn'
 };
 
 const char* SourceTitle(const std::string& id)
@@ -61,45 +59,6 @@ SettingsWindow::SettingsWindow(BWindow* parent)
             .Add(rescan)
         .End();
     tabs->AddTab(library);
-
-    // ---- Music Assistant tab
-    fMAEnabled = new BCheckBox("enabled", "Connect to Music Assistant", nullptr);
-    fMAHost = new BTextControl("host", "Server:", "", nullptr);
-    fMAPort = new BTextControl("port", "Port:", "8095", nullptr);
-    fMAUser = new BTextControl("user", "Username:", "", nullptr);
-    fMAPassword = new BTextControl("password", "Password:", "", nullptr);
-    fMAPassword->TextView()->HideTyping(true);
-    fMAPlayerName = new BTextControl("player", "Player name:", "Amp", nullptr);
-    fMAStatus = new BStringView("status", "");
-    fTestButton = new BButton("test", "Test Connection", new BMessage(kMsgTest));
-    BButton* syncNow = new BButton("sync", "Sync Library Now", new BMessage(kMsgSyncNow));
-    BView* ma = new BView("Music Assistant", 0);
-    ma->SetLayout(new BGroupLayout(B_VERTICAL));
-    BLayoutBuilder::Group<>(ma, B_VERTICAL, 8)
-        .SetInsets(12, 12, 12, 12)
-        .Add(fMAEnabled)
-        .AddGrid(8, 6)
-            .Add(fMAHost->CreateLabelLayoutItem(), 0, 0)
-            .Add(fMAHost->CreateTextViewLayoutItem(), 1, 0)
-            .Add(fMAPort->CreateLabelLayoutItem(), 0, 1)
-            .Add(fMAPort->CreateTextViewLayoutItem(), 1, 1)
-            .Add(fMAUser->CreateLabelLayoutItem(), 0, 2)
-            .Add(fMAUser->CreateTextViewLayoutItem(), 1, 2)
-            .Add(fMAPassword->CreateLabelLayoutItem(), 0, 3)
-            .Add(fMAPassword->CreateTextViewLayoutItem(), 1, 3)
-            .Add(fMAPlayerName->CreateLabelLayoutItem(), 0, 4)
-            .Add(fMAPlayerName->CreateTextViewLayoutItem(), 1, 4)
-        .End()
-        .Add(new BStringView("hint", "Amp logs in with the built-in username/password provider and registers "
-            "itself as a player named as above, so Music Assistant streams to this computer."))
-        .AddGroup(B_HORIZONTAL)
-            .Add(fTestButton)
-            .Add(syncNow)
-            .AddGlue()
-        .End()
-        .Add(fMAStatus)
-        .AddGlue();
-    tabs->AddTab(ma);
 
     // ---- Artwork tab
     fOnlineArt = new BCheckBox("online", "Look up missing artwork online", nullptr);
@@ -151,12 +110,6 @@ SettingsWindow::SettingsWindow(BWindow* parent)
         .End();
 
     // fill in
-    fMAEnabled->SetValue(fData.maEnabled ? B_CONTROL_ON : B_CONTROL_OFF);
-    fMAHost->SetText(fData.maHost.c_str());
-    fMAPort->SetText(std::to_string(fData.maPort).c_str());
-    fMAUser->SetText(fData.maUsername.c_str());
-    fMAPassword->SetText(fData.maPassword.c_str());
-    fMAPlayerName->SetText(fData.maPlayerName.c_str());
     fOnlineArt->SetValue(fData.fetchOnlineArt ? B_CONTROL_ON : B_CONTROL_OFF);
     for (const ArtSource& s : fData.artSources) {
         if (s.id == "theaudiodb")
@@ -214,20 +167,6 @@ bool SettingsWindow::QuitRequested()
 
 void SettingsWindow::Apply()
 {
-    fData.maEnabled = fMAEnabled->Value() == B_CONTROL_ON;
-    fData.maHost = fMAHost->Text();
-    fData.maPort = atoi(fMAPort->Text());
-    if (fData.maPort <= 0)
-        fData.maPort = 8095;
-    std::string user = fMAUser->Text();
-    std::string password = fMAPassword->Text();
-    if (user != fData.maUsername || password != fData.maPassword || fData.maHost != App()->GetSettings().Get().maHost)
-        fData.maToken.clear(); // credentials changed: forget the old session token
-    fData.maUsername = user;
-    fData.maPassword = password;
-    fData.maPlayerName = fMAPlayerName->Text();
-    if (fData.maPlayerName.empty())
-        fData.maPlayerName = "Amp";
     fData.fetchOnlineArt = fOnlineArt->Value() == B_CONTROL_ON;
     for (ArtSource& s : fData.artSources) {
         if (s.id == "theaudiodb") {
@@ -240,33 +179,6 @@ void SettingsWindow::Apply()
     }
     App()->GetSettings().Update(fData);
     be_app->PostMessage(kMsgSettingsChanged);
-}
-
-void SettingsWindow::TestConnection()
-{
-    fMAStatus->SetText("Testing…");
-    fTestButton->SetEnabled(false);
-    std::string host = fMAHost->Text();
-    int port = atoi(fMAPort->Text());
-    std::string user = fMAUser->Text();
-    std::string password = fMAPassword->Text();
-    BMessenger self(this);
-    std::thread([host, port, user, password, self] {
-        MusicAssistant client;
-        client.Configure(host, port > 0 ? port : 8095, user, password, "");
-        Json info;
-        std::string error;
-        BString result;
-        if (!client.ServerInfo(info, error))
-            result << "Cannot reach the server: " << error.c_str();
-        else if (!client.Login(error))
-            result << "Server " << info.value("server_version", "?").c_str() << " reached, but login failed: " << error.c_str();
-        else
-            result << "Connected to Music Assistant " << info.value("server_version", "?").c_str() << " as " << user.c_str();
-        BMessage message(kMsgTestResult);
-        message.AddString("text", result.String());
-        self.SendMessage(&message);
-    }).detach();
 }
 
 void SettingsWindow::MessageReceived(BMessage* message)
@@ -307,21 +219,6 @@ void SettingsWindow::MessageReceived(BMessage* message)
             Apply();
             be_app->PostMessage(kMsgRescan);
             break;
-        case kMsgSyncNow:
-            Apply();
-            be_app->PostMessage(kMsgMAResync);
-            fMAStatus->SetText("Library sync started; progress shows in the main window's status bar.");
-            break;
-        case kMsgTest:
-            TestConnection();
-            break;
-        case kMsgTestResult: {
-            const char* text = nullptr;
-            if (message->FindString("text", &text) == B_OK)
-                fMAStatus->SetText(text);
-            fTestButton->SetEnabled(true);
-            break;
-        }
         case kMsgSourceUp:
         case kMsgSourceDown: {
             int32 index = fSources->CurrentSelection();

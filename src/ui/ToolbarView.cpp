@@ -258,15 +258,13 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
         case kActivityMiniDisc:
             DrawMiniDisc(this, fArtRect.InsetByCopy(2, 2), Rgb(62, 84, 122), Rgb(176, 182, 190), true);
             break;
-        case kActivityScan:
-        case kActivitySync: {
+        case kActivityScan: {
             BRect tile = fArtRect.InsetByCopy(3, 3);
             SetHighColor(Blend(theme::kLcdBottom, Rgb(255, 255, 255), 0.35f));
             FillRoundRect(tile, 5, 5);
             SetHighColor(Blend(theme::kLcdBorder, theme::kLcdBottom, 0.3f));
             StrokeRoundRect(tile, 5, 5);
-            icons::Draw(this, activity.kind == kActivityScan ? icons::kFolder : icons::kSync, tile, 17,
-                theme::kLcdSecondary);
+            icons::Draw(this, icons::kFolder, tile, 17, theme::kLcdSecondary);
             break;
         }
     }
@@ -378,12 +376,11 @@ void ToolbarView::SetPlayerState(PlayerState state)
     Invalidate();
 }
 
-void ToolbarView::SetTrackInfo(const BString& title, const BString& artist, const BString& album, bool isMA)
+void ToolbarView::SetTrackInfo(const BString& title, const BString& artist, const BString& album)
 {
     fTitle = title;
     fArtist = artist;
     fAlbum = album;
-    fIsMA = isMA;
     SongMayHaveAppeared();
     Invalidate(fLcdRect);
 }
@@ -399,12 +396,6 @@ void ToolbarView::SetQuality(const BString& quality)
     if (quality == fQuality)
         return;
     fQuality = quality;
-    Invalidate(fLcdRect);
-}
-
-void ToolbarView::SetLoadingText(const BString& text)
-{
-    fLoading = text;
     Invalidate(fLcdRect);
 }
 
@@ -588,8 +579,8 @@ void ToolbarView::DrawLcd()
     SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.25f));
     StrokeRect(fArtRect);
 
-    // right-hand column: quality label above the MA badge; the text stays centred between
-    // two equal margins so long titles never run under either side
+    // right-hand column: the quality label; the text stays centred between two equal
+    // margins so long titles never run under either side
     float margin = TextRect().left - r.left;
     BFont tiny(be_bold_font);
     tiny.SetSize(8.5f);
@@ -606,8 +597,6 @@ void ToolbarView::DrawLcd()
         DrawTruncated(this, fQuality.String(), pill, B_ALIGN_CENTER, 0);
         margin = std::max(margin, width + 12);
     }
-    if (fIsMA)
-        DrawMABadge(this, BPoint(rightEdge - 22, r.top + (fQuality.IsEmpty() ? 7 : 23)), 11);
 
     BRect textArea(r.left + margin, r.top + 4, r.right - margin, r.top + 20);
     SetHighColor(theme::kLcdText);
@@ -621,8 +610,6 @@ void ToolbarView::DrawLcd()
             line << "  —  ";
         line << fAlbum;
     }
-    if (fState == kLoading)
-        line = fLoading.IsEmpty() ? "Loading…" : fLoading;
     DrawTruncated(this, line.String(), BRect(textArea.left, r.top + 19, textArea.right, r.top + 34), B_ALIGN_CENTER, 0);
     DrawProgress(r);
     DrawPager(r);

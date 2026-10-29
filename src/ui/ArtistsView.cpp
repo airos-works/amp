@@ -126,12 +126,6 @@ void ArtistListView::Draw(BRect updateRect)
         SetFont(&bold);
         SetHighColor(selected ? theme::kSelectedText : theme::kListText);
         float right = row.right - 6;
-        if (artist->isMA()) {
-            DrawMABadge(this, BPoint(row.right - 30, row.top + 6), 11);
-            right = row.right - 34;
-        }
-        SetFont(&bold);
-        SetHighColor(selected ? theme::kSelectedText : theme::kListText); // the badge changed both
         DrawTruncated(this, artist->name.c_str(), BRect(art.right + 8, row.top + 3, right, row.top + 20), B_ALIGN_LEFT, 0);
         SetFont(&plain);
         SetHighColor(selected ? theme::kSelectedText : theme::kListSecondaryText);
@@ -247,8 +241,6 @@ void ArtistHeaderView::Draw(BRect updateRect)
     fNameRect = BRect(nameLeft, baseline - ceilf(height.ascent), nameLeft + nameWidth, baseline + ceilf(height.descent));
     if (fHot)
         StrokeLine(BPoint(nameLeft, baseline + 2), BPoint(nameLeft + nameWidth, baseline + 2));
-    if (artist->isMA())
-        DrawMABadge(this, BPoint(nameLeft + std::min(StringWidth(artist->name.c_str()) + 8, right - nameLeft - 26), 20), 13);
     BFont plain(be_plain_font);
     plain.SetSize(12);
     SetFont(&plain);
@@ -263,10 +255,6 @@ void ArtistHeaderView::Draw(BRect updateRect)
     if (total > 0)
         info << ", " << FormatDuration(total).c_str();
     DrawTruncated(this, info.String(), BRect(nameLeft, 45, right, 63), B_ALIGN_LEFT, 0);
-    if (artist->isMA()) {
-        SetHighColor(theme::kBadgeBackground);
-        DrawTruncated(this, "Streamed from Music Assistant", BRect(nameLeft, 63, right, 81), B_ALIGN_LEFT, 0);
-    }
 }
 
 bool ArtistHeaderView::OverLink(BPoint where) const

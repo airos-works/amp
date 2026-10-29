@@ -50,13 +50,11 @@ const char* const kGlyphs[] = {
     "\xef\x80\x81", // kMusic       U+F001
     "\xef\x80\x87", // kUser        U+F007
     "\xef\x94\x9f", // kAlbum       U+F51F compact-disc
-    "\xef\x94\x99", // kStream      U+F519 tower-broadcast
     "\xef\x80\x8d", // kClose       U+F00D xmark
     "\xef\x80\x8c", // kCheck       U+F00C check
     "\xef\x81\xb1", // kWarning     U+F071 triangle-exclamation
     "\xef\x80\xa3", // kLock        U+F023 lock
     "\xef\x81\xbc", // kFolder      U+F07C folder-open
-    "\xef\x80\xa1", // kSync        U+F021 arrows-rotate
     "\xef\x81\x94", // kChevronRight U+F054 chevron-right
 };
 static_assert(sizeof(kGlyphs) / sizeof(kGlyphs[0]) == kIconCount, "one glyph per icon");

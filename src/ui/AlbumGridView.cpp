@@ -156,8 +156,6 @@ void AlbumGridView::Draw(BRect updateRect)
         BBitmap* bitmap = App()->Art().Get(album.artKey, (int)kArt, &request);
         // the cover lies on the page: a soft shadow below it, a hairline to hold a pale cover
         DrawArtworkOnPage(this, bitmap, art);
-        if (album.isMA)
-            DrawMABadge(this, BPoint(art.left + 5, art.top + 5), 12);
         SetFont(&bold);
         SetHighColor(selected ? theme::kSelectedText : theme::kListText);
         float text = art.bottom + 10; // below the shadow
@@ -304,7 +302,7 @@ void AlbumGridView::ShowContextMenu(int index, BPoint where)
         Library::Locker locker(library);
         for (int64_t id : library.AllPlaylistIds()) {
             const Playlist* playlist = library.PlaylistById(id);
-            if (!playlist || playlist->isMA())
+            if (!playlist)
                 continue;
             BMessage* add = withTracks(kMsgAddToPlaylist);
             add->AddInt64("playlist", id);

@@ -13,7 +13,6 @@
 #include <String.h>
 #include <Window.h>
 #include <map>
-#include <set>
 #include <string>
 
 namespace amp {
@@ -42,12 +41,11 @@ private:
     // the view buttons pick how songs are listed: the albums, artists and MiniDisc views have
     // a layout of their own
     bool ViewModeApplies() const { return fSource != "albums" && fSource != "artists" && fSource != "minidisc"; }
-    std::vector<AlbumCell> CellsFromLibrary(bool maOnly) const;
+    std::vector<AlbumCell> CellsFromLibrary() const;
     std::vector<AlbumCell> CellsFromTracks(const std::vector<int64_t>& tracks) const;
     void ClearDrillDown();
     void UpdateNowPlaying();
     void SetViewMode(int mode);
-    void PlaylistEdited(int64_t playlistId);
     std::vector<int64_t> FilterTracks(const std::vector<int64_t>& ids) const;
     void SaveGeometry();
     // MiniDisc: keeps the sidebar, the disc view and the Write button in step with the recorder
@@ -78,7 +76,6 @@ private:
     int64_t fShownAlbum = 0;
     // what names the shown album: its id changes with every index rebuild while a scan runs
     std::string fShownAlbumArtist, fShownAlbumName;
-    bool fShownAlbumMA = false;
     int64_t ResolveShownAlbum(class Library& library);
     int fViewMode = 0;
     int fPlaylistViewMode = 0;
@@ -89,9 +86,7 @@ private:
     bool fLibraryDirty = false;
     bigtime_t fLastReload = 0;
     BString fTransientStatus;
-    std::set<int64_t> fLoadingPlaylists;   // MA playlists whose tracks are being fetched
-    int fShownQuality = 0;                 // last stream quality pushed to the display
-    BString QualityFor(int64_t trackId, int streamQuality);
+    BString QualityFor(int64_t trackId);
     // the running MiniDisc write, as the display shows it
     std::string fMDJobName;
     std::vector<BString> fMDTitles;       // library titles of the songs being written

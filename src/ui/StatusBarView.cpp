@@ -10,10 +10,9 @@ namespace amp {
 namespace {
 const uint32 kMsgExpire = 'stex';
 
-// The Settings button is the right-most element of the bar; the MA indicator sits to its left.
+// The Settings button is the right-most element of the bar.
 const float kSettingsButtonWidth = 78.0f;
 const float kStatusBarInset = 8.0f;
-const float kIndicatorWidth = 200.0f;
 const float kMiniDiscButtonWidth = 136.0f;
 }
 
@@ -58,21 +57,6 @@ void StatusBarView::DetachedFromWindow()
     delete fExpiry;
     fExpiry = nullptr;
     BView::DetachedFromWindow();
-}
-
-void StatusBarView::SetMAStatus(bool connected, const BString& text)
-{
-    fMAConnected = connected;
-    fMAText = text;
-    Invalidate();
-}
-
-void StatusBarView::SetMAVisible(bool visible)
-{
-    if (fMAVisible == visible)
-        return;
-    fMAVisible = visible;
-    Invalidate();
 }
 
 void StatusBarView::SetShuffle(bool shuffle)
@@ -150,23 +134,11 @@ void StatusBarView::Draw(BRect updateRect)
     SetFont(&font);
     SetHighColor(theme::kToolbarText);
     BString center = fTransient.IsEmpty() ? fSummary : fTransient;
-    // the indicator and the Settings button own the right-hand end: keep the summary clear of them
-    BRect settings = SettingsRect();
-    float indicatorRight = (fMiniDiscVisible ? MiniDiscRect().left : settings.left) - 12;
-    float indicatorLeft = fMAVisible ? indicatorRight - kIndicatorWidth : indicatorRight;
-    float centerRight = indicatorLeft - 12;
+    // the MiniDisc and Settings buttons own the right-hand end: keep the summary clear of them
+    float centerRight = (fMiniDiscVisible ? MiniDiscRect().left : SettingsRect().left) - 24;
     if (centerRight < 120)
         centerRight = 120;
     DrawTruncated(this, center.String(), BRect(120, 0, centerRight, bounds.bottom), B_ALIGN_CENTER, 0);
-    // Music Assistant indicator left of the Settings button
-    if (fMAVisible) {
-        BRect indicator(indicatorLeft, 0, indicatorRight, bounds.bottom);
-        SetHighColor(fMAConnected ? Rgb(60, 170, 80) : Rgb(150, 150, 150));
-        FillEllipse(BRect(indicator.left, 8, indicator.left + 8, 16));
-        SetHighColor(theme::kToolbarText);
-        BString text = fMAText.IsEmpty() ? BString(fMAConnected ? "Music Assistant connected" : "Music Assistant off") : fMAText;
-        DrawTruncated(this, text.String(), BRect(indicator.left + 12, 0, indicator.right, bounds.bottom), B_ALIGN_LEFT, 0);
-    }
     DrawSettingsButton();
     if (fMiniDiscVisible)
         DrawMiniDiscButton();

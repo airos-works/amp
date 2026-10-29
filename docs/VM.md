@@ -40,9 +40,6 @@ python3 tools/vm.py screenshot            # PNG in .vm/screen.png
 bash tools/haiku.sh 'shutdown -q'         # stop gracefully
 ```
 
-`python3 tools/fake-ma-server.py 18095` on the host provides a stand-in Music Assistant
-that the guest reaches as `10.0.2.2:18095` (user `demo`, password `demo`).
-
 `AMP_DATA_DIR=/some/folder build-haiku/Amp` keeps settings, library and artwork cache in
 that folder. A build under test can run next to the installed Amp (the two are different
 files, so single launch does not apply) without touching the library in use.

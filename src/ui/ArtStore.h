@@ -15,11 +15,9 @@
 
 namespace amp {
 
-class MusicAssistant;
-
 class ArtStore {
 public:
-    ArtStore(ImageCache& cache, MusicAssistant& ma);
+    explicit ArtStore(ImageCache& cache);
     ~ArtStore();
 
     void SetTarget(const BMessenger& target) { fTarget = target; }
@@ -45,7 +43,6 @@ private:
     void OnCacheReady(const ArtKey& key, const std::string& path);
 
     ImageCache& fCache;
-    MusicAssistant& fMA;
     BMessenger fTarget;
     std::mutex fMutex;
     std::map<std::string, Entry> fBitmaps;      // "key@size"

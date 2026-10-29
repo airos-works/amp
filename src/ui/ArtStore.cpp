@@ -1,5 +1,4 @@
 #include "ArtStore.h"
-#include "core/MusicAssistant.h"
 #include "player/Messages.h"
 #include <Message.h>
 #include <TranslationUtils.h>
@@ -13,8 +12,8 @@ const size_t kMaxBitmaps = 900;
 std::string CacheKey(const ArtKey& key, int size) { return key + "@" + std::to_string(size); }
 }
 
-ArtStore::ArtStore(ImageCache& cache, MusicAssistant& ma)
-    : fCache(cache), fMA(ma)
+ArtStore::ArtStore(ImageCache& cache)
+    : fCache(cache)
 {
     fCache.onReady = [this](const ArtKey& key, const std::string& path) { OnCacheReady(key, path); };
 }
@@ -51,10 +50,6 @@ ArtRequest ArtStore::RequestFor(const ArtKey& key, const std::string& artist, co
     request.album = album;
     request.localHintPath = localHint;
     request.artistImage = artistImage;
-    if (MusicAssistant::IsMAKey(key)) {
-        request.url = fMA.UrlForKey(key, 512);
-        request.headers = fMA.AuthHeaders();
-    }
     return request;
 }
 

@@ -9,17 +9,12 @@ enum {
     kMsgPlayerStateChanged = 'plst',  // "state" int32 (PlayerState), "track" int64
     kMsgPlayerProgress = 'plpr',      // "position" int64 ms, "duration" int64 ms
     kMsgPlayerError = 'pler',         // "error" string
-    kMsgPlayerVolume = 'plvo',        // "volume" float
-    kMsgMAStatus = 'mast',            // "connected" bool, "message" string, "syncing" bool (library fetch running)
     kMsgTrackFinished = 'trfn',       // player -> app: "generation" int32
     // library / background -> UI
     kMsgLibraryChanged = 'lbch',
     kMsgScanProgress = 'scpr',        // "text" string, "done" bool; from the library scan also
                                       // "scan" true, "processed" and "total" int32
     kMsgArtReady = 'arrd',            // "key" string, "path" string
-    kMsgMASyncDone = 'masd',          // "error" string
-    kMsgMACleared = 'macl',           // Music Assistant was switched off and its content removed
-    kMsgPlaylistLoading = 'plld',     // "playlist" int64, "loading" bool
     // UI actions
     kMsgPlayPause = 'play',
     kMsgStop = 'stop',
@@ -38,11 +33,9 @@ enum {
     kMsgAddToPlaylist = 'adpl',       // "playlist" int64, "tracks" int64[]
     kMsgRemoveFromPlaylist = 'rmpl',  // "playlist" int64, "positions" int32[]
     kMsgMovePlaylistTracks = 'mvpl',  // "playlist" int64, "positions" int32[], "target" int32
-    kMsgSyncPlaylistToMA = 'sypl',    // "playlist" int64, "enable" bool
     kMsgShowSettings = 'sett',
     kMsgSettingsChanged = 'setc',
     kMsgRescan = 'rscn',
-    kMsgMAResync = 'masy',
     kMsgToggleShuffle = 'shuf',
     kMsgToggleRepeat = 'rept',
     kMsgShowAlbum = 'shal',           // "album" int64
@@ -66,6 +59,6 @@ enum {
     kMsgMDClearStatus = 'mdcl',       // the display goes back to the playing song
 };
 
-enum PlayerState { kStopped = 0, kPlaying = 1, kPaused = 2, kLoading = 3 };
+enum PlayerState { kStopped = 0, kPlaying = 1, kPaused = 2 };
 
 } // namespace amp

@@ -32,15 +32,6 @@ void SidebarView::SetPlaylists(const std::vector<SidebarPlaylist>& playlists)
     Invalidate();
 }
 
-void SidebarView::SetMusicAssistant(bool enabled)
-{
-    if (fMusicAssistant == enabled)
-        return;
-    fMusicAssistant = enabled;
-    Rebuild();
-    Invalidate();
-}
-
 void SidebarView::SetMiniDisc(bool connected, const BString& label, bool busy, float fraction, bool locked)
 {
     fMiniDiscLocked = locked;
@@ -65,14 +56,12 @@ void SidebarView::Rebuild()
 {
     fItems.clear();
     float y = 6;
-    auto add = [&](const char* source, const char* label, bool header, int64_t playlistId = 0, bool isMA = false, bool synced = false) {
+    auto add = [&](const char* source, const char* label, bool header, int64_t playlistId = 0) {
         Item item;
         item.source = source;
         item.label = label;
         item.header = header;
         item.playlistId = playlistId;
-        item.isMA = isMA;
-        item.synced = synced;
         float h = header ? kHeaderHeight : kItemHeight;
         item.rect = BRect(0, y, Bounds().Width(), y + h - 1);
         y += h;
@@ -82,8 +71,6 @@ void SidebarView::Rebuild()
     add("music", "Music", false);
     add("artists", "Artists", false);
     add("albums", "Albums", false);
-    if (fMusicAssistant)
-        add("ma", "Music Assistant", false, 0, true);
     if (fMiniDiscConnected) {
         y += 8;
         add("", "DEVICES", true);
@@ -92,7 +79,7 @@ void SidebarView::Rebuild()
     y += 8;
     add("", "PLAYLISTS", true);
     for (const SidebarPlaylist& p : fPlaylists)
-        add("playlist", p.name.String(), false, p.id, p.isMA, p.synced);
+        add("playlist", p.name.String(), false, p.id);
     fContentHeight = y + 10;
     UpdateScrollBar();
 }
@@ -143,21 +130,6 @@ void SidebarView::DrawIcon(const Item& item, BRect rect, bool selected)
     } else if (item.source == "minidisc") {
         DrawMiniDisc(this, rect.InsetByCopy(0.5f, 0.5f), color,
             selected ? theme::kSidebarSelectionBottom : theme::kSidebarBackground);
-    } else if (item.source == "ma") {
-        // the Music Assistant badge stays a badge: it is the provider's mark, not a glyph
-        BRect badge = rect.InsetByCopy(0, 2);
-        SetHighColor(selected ? Rgb(255, 255, 255) : theme::kBadgeBackground);
-        FillRoundRect(badge, 3, 3);
-        BFont font(be_bold_font);
-        font.SetSize(7.5f);
-        SetFont(&font);
-        font_height fh;
-        font.GetHeight(&fh);
-        float width = StringWidth("MA");
-        SetHighColor(selected ? theme::kBadgeBackground : Rgb(255, 255, 255));
-        SetDrawingMode(B_OP_OVER);
-        DrawString("MA", BPoint(badge.left + (badge.Width() - width) / 2 + 0.5f,
-            badge.top + (badge.Height() - (fh.ascent + fh.descent)) / 2 + fh.ascent));
     } else {
         icons::Draw(this, icons::kList, rect, size, color);
     }
@@ -218,17 +190,6 @@ void SidebarView::Draw(BRect updateRect)
             icons::Draw(this, icons::kLock, lock, 10, selected ? theme::kSelectedText : theme::kSidebarHeader);
             right = lock.left - 4;
         }
-        if (item.source == "playlist" && (item.isMA || item.synced)) {
-            float badgeWidth = 24;
-            DrawMABadge(this, BPoint(rect.right - badgeWidth - 4, rect.top + 4), 11);
-            right = rect.right - badgeWidth - 8;
-            if (item.synced && !item.isMA) {
-                // a small sync arrow next to the badge marks a local playlist mirrored to MA
-                SetHighColor(selected ? theme::kSelectedText : theme::kSidebarHeader);
-                StrokeArc(BPoint(rect.right - badgeWidth - 12, rect.top + 10), 4, 4, 40, 280);
-                right -= 10;
-            }
-        }
         SetHighColor(selected ? theme::kSelectedText : theme::kSidebarText);
         DrawTruncated(this, item.label.String(), BRect(rect.left + 32, rect.top, right, rect.bottom), B_ALIGN_LEFT, 0);
     }
@@ -262,7 +223,7 @@ void SidebarView::MouseMoved(BPoint where, uint32 transit, const BMessage* drag)
     fDropIndex = -1;
     if (drag && drag->what == kMsgTrackDrag && (transit == B_INSIDE_VIEW || transit == B_ENTERED_VIEW)) {
         int index = ItemAt(where);
-        if (index >= 0 && ((fItems[index].source == "playlist" && !fItems[index].isMA)
+        if (index >= 0 && (fItems[index].source == "playlist"
                 || (fItems[index].source == "minidisc" && !fMiniDiscBusy)))
             fDropIndex = index;
     }
@@ -293,7 +254,7 @@ void SidebarView::MessageReceived(BMessage* message)
             Window()->PostMessage(&write);
             return;
         }
-        if (index >= 0 && fItems[index].source == "playlist" && !fItems[index].isMA) {
+        if (index >= 0 && fItems[index].source == "playlist") {
             BMessage add(kMsgAddToPlaylist);
             add.AddInt64("playlist", fItems[index].playlistId);
             int64 id;
@@ -338,22 +299,12 @@ void SidebarView::ShowContextMenu(int index, BPoint where)
             writeItem->SetEnabled(!fMiniDiscBusy);
             menu->AddItem(writeItem);
         }
-        if (!item.isMA) {
-            BMessage* rename = new BMessage(kMsgRenamePlaylist);
-            rename->AddInt64("playlist", item.playlistId);
-            menu->AddItem(new BMenuItem("Rename…", rename));
-            if (fMusicAssistant) {
-                BMessage* sync = new BMessage(kMsgSyncPlaylistToMA);
-                sync->AddInt64("playlist", item.playlistId);
-                sync->AddBool("enable", !item.synced);
-                BMenuItem* syncItem = new BMenuItem(item.synced ? "Stop Syncing to Music Assistant" : "Sync to Music Assistant", sync);
-                syncItem->SetMarked(item.synced);
-                menu->AddItem(syncItem);
-            }
-        }
+        BMessage* rename = new BMessage(kMsgRenamePlaylist);
+        rename->AddInt64("playlist", item.playlistId);
+        menu->AddItem(new BMenuItem("Rename…", rename));
         BMessage* remove = new BMessage(kMsgDeletePlaylist);
         remove->AddInt64("playlist", item.playlistId);
-        menu->AddItem(new BMenuItem(item.isMA ? "Delete from Music Assistant" : "Delete Playlist", remove));
+        menu->AddItem(new BMenuItem("Delete Playlist", remove));
     }
     menu->SetTargetForItems(Window());
     menu->SetAsyncAutoDestruct(true);

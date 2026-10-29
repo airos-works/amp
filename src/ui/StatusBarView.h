@@ -1,5 +1,5 @@
-// Bottom status bar: playlist/shuffle/repeat buttons, library summary, the MA indicator
-// and the Settings button at the right-hand end.
+// Bottom status bar: playlist/shuffle/repeat buttons, library summary and the Settings
+// button at the right-hand end.
 #pragma once
 #include <MessageRunner.h>
 #include <String.h>
@@ -15,9 +15,6 @@ public:
     void SetTransient(const BString& text, int seconds = 6);
     void MessageReceived(BMessage* message) override;
     void DetachedFromWindow() override;
-    void SetMAStatus(bool connected, const BString& text);
-    // The indicator is shown while Music Assistant is switched on in the settings.
-    void SetMAVisible(bool visible);
     void SetShuffle(bool shuffle);
     void SetRepeat(int repeat);
     // The "Write to MiniDisc" button (iTunes' "Burn Disc"): shown while a recorder is connected
@@ -37,9 +34,7 @@ private:
     void DrawSettingsButton();
     void DrawMiniDiscButton();
 
-    BString fSummary, fTransient, fMAText;
-    bool fMAConnected = false;
-    bool fMAVisible = true;
+    BString fSummary, fTransient;
     bool fShuffle = false;
     int fRepeat = 0;
     bool fMiniDiscVisible = false;

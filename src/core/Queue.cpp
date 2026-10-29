@@ -149,29 +149,4 @@ void PlayQueue::RemoveTrack(int64_t trackId)
         fPosition = (int)fOrder.size() - 1;
 }
 
-void PlayQueue::RemoveIf(const std::function<bool(int64_t)>& gone)
-{
-    std::vector<int> moved(fTracks.size(), -1);
-    std::vector<int64_t> kept;
-    for (size_t i = 0; i < fTracks.size(); i++) {
-        if (gone(fTracks[i]))
-            continue;
-        moved[i] = (int)kept.size();
-        kept.push_back(fTracks[i]);
-    }
-    if (kept.size() == fTracks.size())
-        return;
-    std::vector<int> order;
-    int position = -1;
-    for (size_t i = 0; i < fOrder.size(); i++) {
-        if ((int)i == fPosition)
-            position = (int)order.size();
-        if (moved[fOrder[i]] >= 0)
-            order.push_back(moved[fOrder[i]]);
-    }
-    fTracks.swap(kept);
-    fOrder.swap(order);
-    fPosition = std::min(position, (int)fOrder.size() - 1);
-}
-
 } // namespace amp

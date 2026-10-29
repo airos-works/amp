@@ -14,12 +14,12 @@ namespace amp {
 
 namespace {
 
-const int kDirectWorkers = 3;
-const int kOnlineWorkers = 3;                  // MusicBrainz is throttled globally; the rest overlap
+const int kWorkers = 3;                        // MusicBrainz is throttled globally; the rest overlap
 const size_t kMaxQueued = 300;                 // older, no longer visible requests are dropped
 const int64_t kMissingRetrySeconds = 7 * 24 * 3600;
-const int64_t kServerMissingRetrySeconds = 15 * 60; // Music Assistant images: the provider may come back
 
+// pictures that came from a Music Assistant server ("ma:", "mau:", "map:"), which Amp no
+// longer talks to
 bool IsServerKey(const std::string& key)
 {
     return key.compare(0, 3, "ma:") == 0 || key.compare(0, 4, "mau:") == 0 || key.compare(0, 4, "map:") == 0;
@@ -98,6 +98,16 @@ bool ImageCache::Open()
         }
         sqlite3_finalize(stmt);
     }
+    // what Music Assistant served earlier versions is never asked for again
+    for (auto it = fIndex.begin(); it != fIndex.end();) {
+        if (IsServerKey(it->first)) {
+            unlink(it->second.c_str());
+            it = fIndex.erase(it);
+        } else
+            ++it;
+    }
+    sqlite3_exec(fDb, "DELETE FROM images WHERE key LIKE 'ma:%' OR key LIKE 'mau:%' OR key LIKE 'map:%';"
+        "DELETE FROM missing WHERE key LIKE 'ma:%' OR key LIKE 'mau:%' OR key LIKE 'map:%';", nullptr, nullptr, nullptr);
     if (sqlite3_prepare_v2(fDb, "SELECT key, updated FROM missing", -1, &stmt, nullptr) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             const unsigned char* key = sqlite3_column_text(stmt, 0);
@@ -114,10 +124,8 @@ void ImageCache::Start()
     if (fRunning)
         return;
     fRunning = true;
-    for (int i = 0; i < kDirectWorkers; i++)
-        fThreads.emplace_back([this] { RunDirect(); });
-    for (int i = 0; i < kOnlineWorkers; i++)
-        fThreads.emplace_back([this] { RunOnline(); });
+    for (int i = 0; i < kWorkers; i++)
+        fThreads.emplace_back([this] { Run(); });
 }
 
 void ImageCache::Stop()
@@ -148,8 +156,7 @@ bool ImageCache::MissingLocked(const ArtKey& key)
     auto it = fMissing.find(key);
     if (it == fMissing.end())
         return false;
-    int64_t retry = IsServerKey(key) ? kServerMissingRetrySeconds : kMissingRetrySeconds;
-    return time(nullptr) - it->second < retry;
+    return time(nullptr) - it->second < kMissingRetrySeconds;
 }
 
 bool ImageCache::KnownMissing(const ArtKey& key)
@@ -215,18 +222,18 @@ void ImageCache::MarkMissing(const ArtKey& key)
     }
 }
 
-void ImageCache::Enqueue(Queue& queue, const ArtRequest& request, bool front)
+void ImageCache::Enqueue(const ArtRequest& request, bool front)
 {
     if (front)
-        queue.push_front(request);
+        fQueue.push_front(request);
     else
-        queue.push_back(request);
+        fQueue.push_back(request);
     fQueued.insert(request.key);
     // forget the oldest requests: they belong to items scrolled out of view long ago and
     // will simply be requested again when they become visible
-    while (queue.size() > kMaxQueued) {
-        fQueued.erase(queue.back().key);
-        queue.pop_back();
+    while (fQueue.size() > kMaxQueued) {
+        fQueued.erase(fQueue.back().key);
+        fQueue.pop_back();
     }
 }
 
@@ -242,26 +249,21 @@ void ImageCache::Request(const ArtRequest& request, bool front)
             if (!front)
                 return;
             // already waiting: a visible item jumps the queue
-            for (Queue* queue : {&fDirectQueue, &fOnlineQueue}) {
-                for (auto it = queue->begin(); it != queue->end(); ++it) {
-                    if (it->key != request.key)
-                        continue;
-                    if (it != queue->begin()) {
-                        ArtRequest moved = *it;
-                        queue->erase(it);
-                        queue->push_front(moved);
-                    }
-                    return;
+            for (auto it = fQueue.begin(); it != fQueue.end(); ++it) {
+                if (it->key != request.key)
+                    continue;
+                if (it != fQueue.begin()) {
+                    ArtRequest moved = *it;
+                    fQueue.erase(it);
+                    fQueue.push_front(moved);
                 }
+                return;
             }
             return;
         }
-        if (!request.url.empty())
-            Enqueue(fDirectQueue, request, front);
-        else if (OnlineLookupPossible(request))
-            Enqueue(fOnlineQueue, request, front);
-        else
+        if (!OnlineLookupPossible(request))
             return;
+        Enqueue(request, front);
     }
     fCondition.notify_all();
 }
@@ -273,14 +275,14 @@ bool ImageCache::OnlineLookupPossible(const ArtRequest& request)
     return fSettings.Get().fetchOnlineArt;
 }
 
-bool ImageCache::NextRequest(Queue& queue, ArtRequest& request)
+bool ImageCache::NextRequest(ArtRequest& request)
 {
     std::unique_lock<std::mutex> lock(fMutex);
-    fCondition.wait(lock, [&] { return !fRunning || !queue.empty(); });
+    fCondition.wait(lock, [&] { return !fRunning || !fQueue.empty(); });
     if (!fRunning)
         return false;
-    request = queue.front();
-    queue.pop_front();
+    request = fQueue.front();
+    fQueue.pop_front();
     fQueued.erase(request.key);
     fActive.insert(request.key);
     return true;
@@ -298,32 +300,10 @@ void ImageCache::Finish(const ArtRequest& request, bool ok)
         onReady(request.key, ok ? PathFor(request.key) : "");
 }
 
-void ImageCache::RunDirect()
+void ImageCache::Run()
 {
     ArtRequest request;
-    while (NextRequest(fDirectQueue, request)) {
-        if (Has(request.key) || StoreDownloaded(request.key, request.url, request.headers)) {
-            Finish(request, true);
-            continue;
-        }
-        // The server could not deliver the picture (for example its provider is offline):
-        // hand the item to the online lookup worker instead of blocking the fast lane.
-        if (OnlineLookupPossible(request)) {
-            std::lock_guard<std::mutex> lock(fMutex);
-            fActive.erase(request.key);
-            ArtRequest online = request;
-            online.url.clear();
-            Enqueue(fOnlineQueue, online, true);
-            fCondition.notify_all();
-        } else
-            Finish(request, false);
-    }
-}
-
-void ImageCache::RunOnline()
-{
-    ArtRequest request;
-    while (NextRequest(fOnlineQueue, request))
+    while (NextRequest(request))
         Finish(request, Has(request.key) || FetchOnline(request));
 }
 

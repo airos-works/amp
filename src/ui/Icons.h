@@ -25,13 +25,11 @@ enum Icon {
     kMusic,
     kUser,
     kAlbum,
-    kStream,
     kClose,
     kCheck,
     kWarning,
     kLock,
     kFolder,
-    kSync,
     kChevronRight,
     kIconCount      // the number of glyphs, not one itself
 };

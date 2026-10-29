@@ -33,8 +33,9 @@ MainWindow::MainWindow(BRect frame)
     SettingsData settings = App()->GetSettings().Get();
     fViewMode = settings.viewMode;
     fPlaylistViewMode = settings.playlistViewMode;
-    fSource = settings.selectedSource.empty() ? "music" : settings.selectedSource;
-    if (fSource == "playlist" || fSource == "minidisc")
+    fSource = settings.selectedSource;
+    // a playlist or the MiniDisc is not opened at start, nor a source that is gone
+    if (fSource != "artists" && fSource != "albums")
         fSource = "music";
 
     fToolbar = new ToolbarView();
@@ -164,7 +165,6 @@ void MainWindow::BuildMenu()
     BMenu* file = new BMenu("File");
     file->AddItem(new BMenuItem("New Playlist…", new BMessage(kMsgNewPlaylist), 'N'));
     file->AddItem(new BMenuItem("Rescan Library", new BMessage(kMsgRescan), 'R'));
-    file->AddItem(new BMenuItem("Sync Music Assistant Library", new BMessage(kMsgMAResync)));
     file->AddSeparatorItem();
     file->AddItem(new BMenuItem("Settings…", new BMessage(kMsgShowSettings), ','));
     file->AddSeparatorItem();
@@ -250,17 +250,14 @@ void MainWindow::ReloadSidebar()
             const Playlist* p = library.PlaylistById(id);
             if (!p)
                 continue;
-            lists.push_back({p->id, p->name.c_str(), p->isMA(), p->syncToMA});
+            lists.push_back({p->id, p->name.c_str()});
             if (p->id == fPlaylistId)
                 playlistGone = false;
         }
     }
-    bool musicAssistant = App()->MAEnabled();
-    fSidebar->SetMusicAssistant(musicAssistant);
-    fStatus->SetMAVisible(musicAssistant);
     fSidebar->SetPlaylists(lists);
-    // the source on show went away (Music Assistant switched off, a playlist deleted on the server)
-    if (playlistGone || (fSource == "ma" && !musicAssistant)) {
+    // the playlist on show went away
+    if (playlistGone) {
         fSource = "music";
         fPlaylistId = 0;
         ClearDrillDown();
@@ -286,14 +283,14 @@ std::vector<int64_t> MainWindow::FilterTracks(const std::vector<int64_t>& ids) c
     return result;
 }
 
-std::vector<AlbumCell> MainWindow::CellsFromLibrary(bool maOnly) const
+std::vector<AlbumCell> MainWindow::CellsFromLibrary() const
 {
     std::vector<AlbumCell> cells;
     Library& library = App()->GetLibrary();
     Library::Locker locker(library);
     for (int64_t id : library.AllAlbumIds()) {
         const Album* a = library.AlbumById(id);
-        if (!a || (maOnly && !a->isMA()))
+        if (!a)
             continue;
         if (!fSearch.empty() && !ContainsNoCase(a->name, fSearch) && !ContainsNoCase(a->artist, fSearch))
             continue;
@@ -303,9 +300,8 @@ std::vector<AlbumCell> MainWindow::CellsFromLibrary(bool maOnly) const
         cell.artist = a->artist;
         cell.artKey = a->art;
         cell.year = a->year;
-        cell.isMA = a->isMA();
         cell.trackIds = a->trackIds;
-        if (!a->isMA() && !a->trackIds.empty())
+        if (!a->trackIds.empty())
             if (const Track* first = library.TrackById(a->trackIds.front()))
                 cell.localHint = first->uri;
         cells.push_back(std::move(cell));
@@ -328,7 +324,7 @@ std::vector<AlbumCell> MainWindow::CellsFromTracks(const std::vector<int64_t>& t
         std::string artist = t->groupingArtist().empty() ? "Unknown Artist" : t->groupingArtist();
         std::string name = t->album.empty() ? "Unknown Album" : t->album;
         std::string key = t->albumId != 0 ? "#" + std::to_string(t->albumId)
-            : (t->isMA() ? "ma|" : "local|") + ToLower(artist) + "|" + ToLower(name);
+            : ToLower(artist) + "|" + ToLower(name);
         auto found = byKey.find(key);
         if (found == byKey.end()) {
             AlbumCell cell;
@@ -344,9 +340,7 @@ std::vector<AlbumCell> MainWindow::CellsFromTracks(const std::vector<int64_t>& t
                 cell.artKey = t->art.empty() ? MakeAlbumArtKey(artist, name) : t->art;
                 cell.year = t->year;
             }
-            cell.isMA = t->isMA();
-            if (!t->isMA())
-                cell.localHint = t->uri;
+            cell.localHint = t->uri;
             found = byKey.emplace(key, cells.size()).first;
             cells.push_back(std::move(cell));
         }
@@ -408,32 +402,14 @@ void MainWindow::ReloadContent()
         } else if (fSource == "playlist") {
             if (const Playlist* p = library.PlaylistById(fPlaylistId)) {
                 tracks = p->trackIds;
-                editablePlaylist = p->isMA() ? 0 : p->id;
-                if (p->isMA())
-                    fTrackList->SetEmptyText("This Music Assistant playlist is empty");
-                else
-                    fTrackList->SetEmptyText("Drag songs here or use \"Add to Playlist\" to fill this playlist");
+                editablePlaylist = p->id;
+                fTrackList->SetEmptyText("Drag songs here or use \"Add to Playlist\" to fill this playlist");
             }
-        } else if (fSource == "ma") {
-            for (int64_t id : library.AllTrackIds())
-                if (const Track* t = library.TrackById(id))
-                    if (t->isMA())
-                        tracks.push_back(id);
-            fTrackList->SetEmptyText("No Music Assistant tracks yet. Connect a server in Settings.");
         } else {
             tracks = library.AllTrackIds();
             fTrackList->SetEmptyText("No songs yet. Add library folders in Settings (File > Settings…).");
         }
     }
-    bool loading = false;
-    BString loadingText;
-    if (fSource == "playlist" && !drillDown && tracks.empty() && fLoadingPlaylists.count(fPlaylistId)) {
-        loading = true;
-        Library::Locker locker(library);
-        if (const Playlist* p = library.PlaylistById(fPlaylistId))
-            loadingText << "Loading \u201C" << p->name.c_str() << "\u201D from Music Assistant\u2026";
-    }
-
     // 2. search filter; an editable playlist keeps the playlist position of every shown row
     std::vector<int32> positions;
     if (!fSearch.empty() && !drillDown) {
@@ -456,12 +432,12 @@ void MainWindow::ReloadContent()
 
     // 3. the view: covers, album list or plain list
     int viewMode = CurrentViewMode();
-    bool grid = !drillDown && !loading && (fSource == "albums" || viewMode == 2);
+    bool grid = !drillDown && (fSource == "albums" || viewMode == 2);
     if (grid) {
         if (fSource == "playlist")
             fGrid->SetCells(CellsFromTracks(tracks));
         else
-            fGrid->SetCells(CellsFromLibrary(fSource == "ma"));
+            fGrid->SetCells(CellsFromLibrary());
         fCards->SetVisibleItem((int32)1);
         if (fSource == "albums") {
             Library::Locker locker(library);
@@ -471,7 +447,6 @@ void MainWindow::ReloadContent()
         return;
     }
     int mode = (drillDown || viewMode != 0) ? TrackListView::kGrouped : TrackListView::kPlain;
-    fTrackList->SetLoading(loading, loadingText.String());
     fTrackList->SetTracks(tracks, mode, drillDown ? 0 : editablePlaylist, positions);
     fTrackList->SetNowPlaying(fNowPlayingTrack, fPlayerState);
     fCards->SetVisibleItem((int32)0);
@@ -515,17 +490,6 @@ void MainWindow::SelectSource(const std::string& source, int64_t playlistId, boo
     fPlaylistId = playlistId;
     ClearDrillDown();
     fSidebar->Select(source.c_str(), playlistId);
-    if (source == "playlist") {
-        bool load = false;
-        {
-            Library& library = App()->GetLibrary();
-            Library::Locker locker(library);
-            if (const Playlist* p = library.PlaylistById(playlistId))
-                load = p->isMA(); // cached tracks show at once; a refresh runs in the background
-        }
-        if (load && App()->LoadMAPlaylist(playlistId))
-            fLoadingPlaylists.insert(playlistId);
-    }
     if (source == "minidisc")
         App()->MiniDisc().Refresh(true);
     ReloadContent();
@@ -546,7 +510,6 @@ void MainWindow::ShowAlbum(int64_t albumId)
         const Album* album = library.AlbumById(albumId);
         fShownAlbumArtist = album ? album->artist : std::string();
         fShownAlbumName = album ? album->name : std::string();
-        fShownAlbumMA = album && album->isMA();
     }
     if (fSource == "artists" || fSource == "playlist" || fSource == "minidisc")
         fSource = "music";
@@ -571,13 +534,12 @@ void MainWindow::ShowNowPlaying()
         if (library.AlbumById(playing->albumId))
             albumId = playing->albumId;
         else {
-            // a song that only lives in a playlist has no library album: the songs of its
+            // a song the index has no album for yet (a scan is running): the songs of its
             // album that are in the play queue stand in for it
             std::string artist = ToLower(playing->groupingArtist()), name = ToLower(playing->album);
             for (int64_t id : queue)
                 if (const Track* t = library.TrackById(id))
-                    if (t->albumId == 0 && t->isMA() == playing->isMA() && ToLower(t->groupingArtist()) == artist
-                        && ToLower(t->album) == name)
+                    if (t->albumId == 0 && ToLower(t->groupingArtist()) == artist && ToLower(t->album) == name)
                         songs.push_back(id);
             if (std::find(songs.begin(), songs.end(), trackId) == songs.end())
                 songs = {trackId};
@@ -608,10 +570,9 @@ int64_t MainWindow::ResolveShownAlbum(Library& library)
     if (fShownAlbum == 0 || fShownAlbumName.empty())
         return fShownAlbum;
     const Album* album = library.AlbumById(fShownAlbum);
-    if (album && album->artist == fShownAlbumArtist && album->name == fShownAlbumName
-        && album->isMA() == fShownAlbumMA)
+    if (album && album->artist == fShownAlbumArtist && album->name == fShownAlbumName)
         return fShownAlbum;
-    int64_t found = library.AlbumIdFor(fShownAlbumArtist, fShownAlbumName, fShownAlbumMA);
+    int64_t found = library.AlbumIdFor(fShownAlbumArtist, fShownAlbumName);
     if (found != 0)
         fShownAlbum = found;
     return found;
@@ -647,7 +608,6 @@ void MainWindow::UpdateNowPlaying()
     fNowPlayingTrack = player.CurrentTrack();
     fToolbar->SetPlayerState(fPlayerState);
     BString title, artist, album;
-    bool isMA = false;
     ArtRequest art;
     if (fNowPlayingTrack) {
         Library& library = App()->GetLibrary();
@@ -656,22 +616,18 @@ void MainWindow::UpdateNowPlaying()
             title = t->title.c_str();
             artist = t->artist.c_str();
             album = t->album.c_str();
-            isMA = t->isMA();
             // the album's cover when the track belongs to a library album, else the track's own
             const Album* owner = library.AlbumById(t->albumId);
             ArtKey key = owner ? owner->art : t->art;
             std::string albumArtist = owner ? owner->artist : t->groupingArtist();
             if (key.empty())
                 key = MakeAlbumArtKey(albumArtist, t->album);
-            art = App()->Art().RequestFor(key, albumArtist, t->album, isMA ? "" : t->uri, false);
+            art = App()->Art().RequestFor(key, albumArtist, t->album, t->uri, false);
         }
     }
-    fToolbar->SetTrackInfo(title, artist, album, isMA);
+    fToolbar->SetTrackInfo(title, artist, album);
     fToolbar->SetArtwork(art);
-    fShownQuality = player.StreamQuality();
-    fToolbar->SetQuality(QualityFor(fNowPlayingTrack, fShownQuality));
-    fTrackList->SetNowPlayingQuality(fShownQuality);
-    fArtists->TrackList()->SetNowPlayingQuality(fShownQuality);
+    fToolbar->SetQuality(QualityFor(fNowPlayingTrack));
     fTrackList->SetNowPlaying(fNowPlayingTrack, fPlayerState);
     fArtists->TrackList()->SetNowPlaying(fNowPlayingTrack, fPlayerState);
     if (fPlayerState == kStopped)
@@ -685,28 +641,12 @@ void MainWindow::UpdateNowPlaying()
     }
 }
 
-BString MainWindow::QualityFor(int64_t trackId, int streamQuality)
+BString MainWindow::QualityFor(int64_t trackId)
 {
-    // what the server reports for the running stream wins over the library's figures
-    if (streamQuality != 0)
-        return QualityLabel(streamQuality < 0, streamQuality).c_str();
     Library& library = App()->GetLibrary();
     Library::Locker locker(library);
     const Track* track = library.TrackById(trackId);
     return track ? QualityLabel(track->lossless, track->bitrate).c_str() : "";
-}
-
-void MainWindow::PlaylistEdited(int64_t playlistId)
-{
-    Library& library = App()->GetLibrary();
-    bool sync = false;
-    {
-        Library::Locker locker(library);
-        if (const Playlist* p = library.PlaylistById(playlistId))
-            sync = p->syncToMA && !p->isMA();
-    }
-    if (sync)
-        App()->SyncPlaylistToMA(playlistId);
 }
 
 void MainWindow::MessageReceived(BMessage* message)
@@ -752,12 +692,6 @@ void MainWindow::MessageReceived(BMessage* message)
             float volume = 0.8f;
             if (message->FindFloat("volume", &volume) == B_OK)
                 player.SetVolume(volume);
-            break;
-        }
-        case kMsgPlayerVolume: {
-            float volume = 0.8f;
-            if (message->FindFloat("volume", &volume) == B_OK)
-                fToolbar->SetVolume(volume);
             break;
         }
         case kMsgToggleShuffle:
@@ -881,7 +815,6 @@ void MainWindow::MessageReceived(BMessage* message)
             if (message->FindString("name", &name) == B_OK) {
                 library.RenamePlaylist(playlistId, name);
                 ReloadSidebar();
-                PlaylistEdited(playlistId);
             } else {
                 std::string current;
                 {
@@ -898,31 +831,19 @@ void MainWindow::MessageReceived(BMessage* message)
         case kMsgDeletePlaylist: {
             int64 playlistId = 0;
             message->FindInt64("playlist", &playlistId);
-            std::string name, maItemId;
-            bool isMA = false;
+            std::string name;
             {
                 Library::Locker locker(library);
-                if (const Playlist* p = library.PlaylistById(playlistId)) {
+                if (const Playlist* p = library.PlaylistById(playlistId))
                     name = p->name;
-                    isMA = p->isMA();
-                    maItemId = p->maItemId;
-                }
             }
             BString text;
             text << "Delete the playlist \"" << name.c_str() << "\"?";
-            if (isMA)
-                text << "\n\nThis removes it from the Music Assistant server as well.";
             BAlert* alert = new BAlert("Delete Playlist", text.String(), "Cancel", "Delete", nullptr,
                 B_WIDTH_AS_USUAL, B_WARNING_ALERT);
             alert->SetShortcut(0, B_ESCAPE);
             if (alert->Go() == 1) {
                 library.DeletePlaylist(playlistId);
-                if (isMA && !maItemId.empty()) {
-                    std::thread([maItemId] {
-                        std::string error;
-                        App()->MA().DeletePlaylist(maItemId, error);
-                    }).detach();
-                }
                 bool shown = fSource == "playlist" && fPlaylistId == playlistId;
                 ReloadSidebar();
                 if (shown)
@@ -941,7 +862,6 @@ void MainWindow::MessageReceived(BMessage* message)
             message->FindInt32("position", &position);
             if (playlistId && !tracks.empty()) {
                 library.AddToPlaylist(playlistId, tracks, position);
-                PlaylistEdited(playlistId);
                 BString text;
                 text << "Added " << (int)tracks.size() << (tracks.size() == 1 ? " song" : " songs") << " to the playlist";
                 fStatus->SetTransient(text);
@@ -955,10 +875,8 @@ void MainWindow::MessageReceived(BMessage* message)
             int32 position;
             for (int32 i = 0; message->FindInt32("positions", i, &position) == B_OK; i++)
                 positions.push_back(position);
-            if (playlistId && !positions.empty()) {
+            if (playlistId && !positions.empty())
                 library.RemoveFromPlaylist(playlistId, positions);
-                PlaylistEdited(playlistId);
-            }
             break;
         }
         case kMsgMovePlaylistTracks: {
@@ -970,45 +888,19 @@ void MainWindow::MessageReceived(BMessage* message)
                 positions.push_back(position);
             int32 target = 0;
             message->FindInt32("target", &target);
-            if (playlistId && !positions.empty()) {
+            if (playlistId && !positions.empty())
                 library.MoveInPlaylist(playlistId, positions, target);
-                PlaylistEdited(playlistId);
-            }
-            break;
-        }
-        case kMsgSyncPlaylistToMA: {
-            int64 playlistId = 0;
-            bool enable = false;
-            message->FindInt64("playlist", &playlistId);
-            message->FindBool("enable", &enable);
-            std::string maItemId, maUri;
-            {
-                Library::Locker locker(library);
-                if (const Playlist* p = library.PlaylistById(playlistId)) {
-                    maItemId = p->maItemId;
-                    maUri = p->maUri;
-                }
-            }
-            if (enable && !App()->MAEnabled()) {
-                fStatus->SetTransient("Enable Music Assistant in Settings to sync playlists");
-                break;
-            }
-            library.LinkPlaylistToMA(playlistId, maItemId, maUri, enable);
-            ReloadSidebar();
-            if (enable)
-                App()->SyncPlaylistToMA(playlistId);
             break;
         }
         case kMsgShowSettings:
             (new SettingsWindow(this))->Show();
             break;
         case kMsgRescan:
-        case kMsgMAResync:
             be_app->PostMessage(message);
             break;
         case kMsgAbout: {
             BAlert* alert = new BAlert("About Amp",
-                "Amp 0.3.2\n\nA native music player for Haiku with local libraries, Music Assistant streaming and MiniDisc (NetMD) writing.\n"
+                "Amp 0.3.5\n\nA native music player for Haiku with local libraries and MiniDisc (NetMD) writing.\n"
                 "Icons from Font Awesome Free 6.7.2. Artwork from embedded tags, folder art, MusicBrainz/Cover Art Archive, TheAudioDB and Discogs.",
                 "OK");
             alert->Go(nullptr);
@@ -1026,14 +918,6 @@ void MainWindow::MessageReceived(BMessage* message)
             message->FindInt64("track", &track);
             if (track != fNowPlayingTrack || player.State() != fPlayerState)
                 UpdateNowPlaying();
-            int32 quality = 0;
-            message->FindInt32("quality", &quality);
-            if (quality != fShownQuality && fNowPlayingTrack) {
-                fShownQuality = quality;
-                fToolbar->SetQuality(QualityFor(fNowPlayingTrack, quality));
-                fTrackList->SetNowPlayingQuality(quality);
-                fArtists->TrackList()->SetNowPlayingQuality(quality);
-            }
             fToolbar->SetProgress(position, duration);
             break;
         }
@@ -1042,42 +926,6 @@ void MainWindow::MessageReceived(BMessage* message)
             if (message->FindString("error", &error) == B_OK)
                 fStatus->SetTransient(error);
             UpdateNowPlaying();
-            break;
-        }
-        case kMsgMAStatus: {
-            bool connected = false;
-            const char* text = nullptr;
-            message->FindBool("connected", &connected);
-            message->FindString("message", &text);
-            fStatus->SetMAStatus(connected, text ? text : "");
-            if (message->GetBool("syncing", false)) {
-                ToolbarView::Activity sync;
-                sync.id = "ma-sync";
-                sync.kind = ToolbarView::kActivitySync;
-                sync.headline = "Syncing Music Assistant";
-                BString detail(text ? text : "");
-                detail.RemoveFirst("Music Assistant: ");
-                sync.detail = detail;
-                fToolbar->SetActivity(sync, false);
-            } else if (!connected)
-                fToolbar->RemoveActivity("ma-sync"); // switched off or the connection went
-            break;
-        }
-        case kMsgMASyncDone: {
-            ReloadSidebar();
-            ReloadContent();
-            if (fToolbar->FindActivity("ma-sync")) {
-                BString error = message->GetString("error", "");
-                ToolbarView::Activity sync;
-                sync.id = "ma-sync";
-                sync.kind = ToolbarView::kActivitySync;
-                sync.done = true;
-                sync.failed = !error.IsEmpty();
-                sync.headline = error.IsEmpty() ? "Music Assistant synced" : "Music Assistant sync failed";
-                sync.detail = error;
-                fToolbar->SetActivity(sync, false);
-                ExpireActivity("ma-sync", 6000000);
-            }
             break;
         }
         case kMsgActivityExpired: {
@@ -1091,27 +939,6 @@ void MainWindow::MessageReceived(BMessage* message)
             const ToolbarView::Activity* activity = fToolbar->FindActivity(id.String());
             if (activity && activity->done)
                 fToolbar->RemoveActivity(id.String());
-            break;
-        }
-        case kMsgMACleared:
-            // album ids were dealt anew and the streamed songs are gone: back to the plain source
-            ClearDrillDown();
-            fLoadingPlaylists.clear();
-            ReloadSidebar();
-            ReloadContent();
-            UpdateNowPlaying();
-            break;
-        case kMsgPlaylistLoading: {
-            int64 playlistId = 0;
-            bool loading = false;
-            message->FindInt64("playlist", &playlistId);
-            message->FindBool("loading", &loading);
-            if (loading)
-                fLoadingPlaylists.insert(playlistId);
-            else
-                fLoadingPlaylists.erase(playlistId);
-            if (fSource == "playlist" && fPlaylistId == playlistId)
-                ReloadContent();
             break;
         }
         case kMsgScanProgress: {

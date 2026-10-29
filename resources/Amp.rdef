@@ -13,7 +13,7 @@ resource app_version {
     variety = B_APPV_ALPHA,
     internal = 0,
     short_info = "Amp 0.3.5 alpha — music player",
-    long_info = "A native Haiku music player for local libraries and Music Assistant, styled after iTunes 8."
+    long_info = "A native Haiku music player for local libraries, styled after iTunes 8."
 };
 resource file_types message {
     "types" = "audio/mpeg",

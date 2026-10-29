@@ -1,9 +1,7 @@
 # Amp
 
 Amp is a native music player for Haiku styled after iTunes 8. It plays a local library
-(MP3, MP4/M4A/AAC, FLAC, WAV, OGG) and streams tracks from a
-[Music Assistant](https://www.music-assistant.io) server, registering itself as a player so the
-server sends audio straight to the Haiku machine.
+(MP3, MP4/M4A/AAC, FLAC, WAV, OGG) and writes playlists and albums to MiniDisc.
 
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
@@ -25,10 +23,6 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   Folders are listed and files are read by up to eight workers at once, each file in a few
   large reads, so a library of tens of thousands of songs on a network share is there in
   minutes.
-- Music Assistant: username/password login, library sync (artists, albums, tracks,
-  playlists), playback through the Sendspin player protocol, playlists mirrored back to the
-  server. Streamed items carry a small **MA** badge everywhere. Switching Music Assistant
-  off in the settings removes its songs, albums, artists and playlists from the library.
 - Browse by song list, album-grouped list with artwork, album grid, artists, and playlists;
   instant search across title, artist and album. Playlists offer the same three views
   (list, album list, cover grid) and remember their own choice; the albums and artists views
@@ -38,18 +32,17 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   view, clicking the artist's picture or name opens the artist's MusicBrainz page in the
   web browser (a MusicBrainz search when the artist cannot be told apart by name).
 - Playlists: create, rename, delete, add and remove songs, drag to reorder, drag songs or
-  whole albums onto a playlist in the sidebar, "Sync to Music Assistant" per playlist.
+  whole albums onto a playlist in the sidebar.
 - Artwork cache with online lookup through Deezer, MusicBrainz + Cover Art Archive,
   TheAudioDB and Discogs (order and keys configurable), stored under the user cache
   directory so the next launch is instant. Whatever is visible right now is fetched first.
 - Transport with volume, seek bar, shuffle and repeat; play queue with "Play Next" and
   "Add to Up Next". The display shows the playing track's artwork, title, artist and album,
-  elapsed and remaining time, the MA badge for streamed tracks, and the source quality
-  ("Lossless" or the bit rate); a click on the artwork opens the song's album with the song
-  selected. Longer jobs (a MiniDisc write, a library scan, a Music
-  Assistant sync) get a page of their own in the display: while more than one thing is going
-  on, the arrow beside the artwork, the dots under it or a click on the text turns between the
-  song and each job, like iTunes' status display.
+  elapsed and remaining time, and the source quality ("Lossless" or the bit rate); a click
+  on the artwork opens the song's album with the song selected. Longer jobs (a MiniDisc
+  write, a library scan) get a page of their own in the display: while more than one thing
+  is going on, the arrow beside the artwork, the dots under it or a click on the text turns
+  between the song and each job, like iTunes' status display.
 - MiniDisc: playlists, albums and selected songs can be written to a MiniDisc in a NetMD
   recorder, in SP. The recorder appears under DEVICES with the disc's contents and a capacity
   bar; the display shows iTunes-style progress with a cancel button. Amp asks before erasing
@@ -60,9 +53,8 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   a double click on the picture opens it in Amp. The add-on (`src/quicklook/`, shipped as
   `add-ons/quick_look/Amp`) is built when the SDK has `add-ons/quick_look/QuickLook.h`
   (`make QUICKLOOK=1` forces it).
-- Library folders, the Music Assistant server and account and the artwork sources live in one
-  Settings window, opened from the **Settings** button at the bottom right of the main window
-  or File > Settings….
+- Library folders and the artwork sources live in one Settings window, opened from the
+  **Settings** button at the bottom right of the main window or File > Settings….
 - The toolbar, status bar, sidebar and list buttons draw their glyphs from Font Awesome 6
   Free (SIL OFL 1.1, icons CC BY 4.0). The font ships inside the package and is registered with
   the font server on first run, so the buttons look the same on a bare Haiku install.
@@ -85,21 +77,12 @@ rebuilds the vector application icon and prepares the MiniDisc pictures in
 workstation (a bare-metal Haiku machine with the test recorder) what `tools/haiku.sh` and
 `tools/sync-build.sh` do for the VM.
 
-## Music Assistant notes
+## Music Assistant
 
-Amp talks to Music Assistant 2.10 through its HTTP API (`POST /api`) and connects to the
-authenticated `/sendspin` WebSocket proxy as an unencrypted ("transition mode") Sendspin
-player, which the server allows by default (*Allow legacy clients* in the Sendspin provider
-settings). Music Assistant wraps that player in a "universal player" carrying the name
-configured in Settings; Amp sends play and queue commands to that wrapper. Only the
-built-in username/password login provider is supported.
-
-Tracks whose music provider is not loaded on the server (for example a network share that
-is offline) stay in the library but cannot be played; Music Assistant answers "there is
-nothing to play here" and Amp reports it in the status bar.
-
-`tools/fake-ma-server.py` is a small stand-in server used to exercise the integration
-without a real installation.
+Earlier versions also streamed from a [Music Assistant](https://www.music-assistant.io)
+server. That support was removed in `0.3.5~alpha-10` (issue #12); it can be restored from the
+git history. On the first start of a newer version the library drops the songs, playlists and
+artwork that came from the server, and local playlists keep their local songs.
 
 ## License
 

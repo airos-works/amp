@@ -14,15 +14,6 @@ struct ArtSource {
 
 struct SettingsData {
     std::vector<std::string> libraryFolders;
-    // Music Assistant
-    bool maEnabled = false;
-    std::string maHost;
-    int maPort = 8095;
-    std::string maUsername;
-    std::string maPassword;
-    std::string maToken;          // short-lived token from the last login
-    std::string maPlayerId;       // our Sendspin client id
-    std::string maPlayerName = "Amp";
     // Artwork
     std::vector<ArtSource> artSources;
     bool fetchOnlineArt = true;
@@ -56,7 +47,5 @@ private:
     mutable std::mutex fMutex;
     SettingsData fData;
 };
-
-std::string GenerateClientId();
 
 } // namespace amp

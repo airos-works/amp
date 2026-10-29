@@ -1,9 +1,7 @@
 #include "Settings.h"
 #include "Json.h"
-#include <chrono>
 #include <cstdio>
 #include <fstream>
-#include <random>
 #include <sstream>
 
 namespace amp {
@@ -35,15 +33,6 @@ bool Settings::Load()
     for (auto& f : j.value("libraryFolders", Json::array()))
         if (f.is_string())
             d.libraryFolders.push_back(f.get<std::string>());
-    Json ma = j.value("musicAssistant", Json::object());
-    d.maEnabled = ma.value("enabled", false);
-    d.maHost = ma.value("host", "");
-    d.maPort = ma.value("port", 8095);
-    d.maUsername = ma.value("username", "");
-    d.maPassword = ma.value("password", "");
-    d.maToken = ma.value("token", "");
-    d.maPlayerId = ma.value("playerId", "");
-    d.maPlayerName = ma.value("playerName", "Amp");
     Json art = j.value("artwork", Json::object());
     d.fetchOnlineArt = art.value("fetchOnline", true);
     for (auto& s : art.value("sources", Json::array())) {
@@ -94,9 +83,6 @@ bool Settings::Save()
     }
     j["libraryFolders"] = d.libraryFolders;
     j["scannerVersion"] = d.scannerVersion;
-    j["musicAssistant"] = {{"enabled", d.maEnabled}, {"host", d.maHost}, {"port", d.maPort},
-        {"username", d.maUsername}, {"password", d.maPassword}, {"token", d.maToken},
-        {"playerId", d.maPlayerId}, {"playerName", d.maPlayerName}};
     Json sources = Json::array();
     for (const ArtSource& s : d.artSources)
         sources.push_back({{"id", s.id}, {"enabled", s.enabled}, {"apiKey", s.apiKey}});
@@ -127,17 +113,6 @@ void Settings::Update(const SettingsData& data)
         fData = data;
     }
     Save();
-}
-
-std::string GenerateClientId()
-{
-    static const char alphabet[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-    std::mt19937_64 rng((uint64_t)std::chrono::steady_clock::now().time_since_epoch().count()
-        ^ (uint64_t)std::random_device{}());
-    std::string id = "amp-";
-    for (int i = 0; i < 16; i++)
-        id.push_back(alphabet[rng() % (sizeof(alphabet) - 1)]);
-    return id;
 }
 
 } // namespace amp

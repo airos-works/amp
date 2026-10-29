@@ -49,9 +49,6 @@ namespace theme {
     const rgb_color kLcdSecondary = {90, 98, 86, 255};
     const rgb_color kLcdBar = {120, 130, 115, 255};
     const rgb_color kLcdBarBackground = {180, 190, 172, 255};
-    // Music Assistant badge
-    const rgb_color kBadgeBackground = {40, 120, 200, 255};
-    const rgb_color kBadgeText = {255, 255, 255, 255};
     // artwork placeholder
     const rgb_color kArtPlaceholderTop = {232, 232, 232, 255};
     const rgb_color kArtPlaceholderBottom = {200, 200, 200, 255};
@@ -65,7 +62,6 @@ namespace theme {
 
 void FillVerticalGradient(BView* view, BRect rect, rgb_color top, rgb_color bottom);
 void FillRoundGradient(BView* view, BRect rect, float radius, rgb_color top, rgb_color bottom);
-void DrawMABadge(BView* view, BPoint leftTop, float height = 11.0f);
 void DrawArtPlaceholder(BView* view, BRect rect);
 void DrawNoteIcon(BView* view, BRect rect, rgb_color color);
 // A MiniDisc cartridge centred in `rect`. `detailed` is the colour picture for sizes above
