@@ -19,7 +19,7 @@ const float kPadding = 12.0f;
 }
 
 AlbumGridView::AlbumGridView()
-    : BView("albumgrid", B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE)
+    : BView("albumgrid", B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
 {
     SetViewColor(B_TRANSPARENT_COLOR);
 }
@@ -30,9 +30,8 @@ void AlbumGridView::SetCells(std::vector<AlbumCell> cells)
     if (fSelected >= (int)fAlbums.size())
         fSelected = -1;
     Relayout();
-    float maxScroll = std::max(0.0f, kPadding * 2 + ((int)fAlbums.size() + fColumns - 1) / fColumns * kCellHeight - Bounds().Height());
-    if (Bounds().top > maxScroll)
-        ScrollTo(0, maxScroll);
+    if (Bounds().top > MaxScroll())
+        ScrollTo(0, MaxScroll());
     Invalidate();
 }
 
@@ -56,22 +55,41 @@ void AlbumGridView::Relayout()
     UpdateScrollBar();
 }
 
+float AlbumGridView::ContentHeight() const
+{
+    int rows = ((int)fAlbums.size() + fColumns - 1) / fColumns;
+    return kPadding + rows * kCellHeight + kPadding;
+}
+
+float AlbumGridView::MaxScroll() const
+{
+    return std::max(0.0f, ContentHeight() - Bounds().Height());
+}
+
 void AlbumGridView::UpdateScrollBar()
 {
     BScrollBar* bar = ScrollBar(B_VERTICAL);
     if (!bar)
         return;
-    int rows = ((int)fAlbums.size() + fColumns - 1) / fColumns;
-    float content = kPadding + rows * kCellHeight + kPadding;
+    float content = ContentHeight();
     float visible = Bounds().Height();
-    bar->SetRange(0, std::max(0.0f, content - visible));
+    bar->SetRange(0, MaxScroll());
     bar->SetProportion(content > 0 ? std::min(1.0f, visible / content) : 1);
     bar->SetSteps(kCellHeight / 4, visible - kCellHeight / 2);
 }
 
 void AlbumGridView::FrameResized(float width, float height)
 {
+    // a change in the number of columns moves every album to another row: keep the row at
+    // the top of the view, at the same offset, on the album that began it
+    float top = Bounds().top;
+    int row = std::max(0, (int)((top - kPadding) / kCellHeight));
+    float offset = top - (kPadding + row * kCellHeight);
+    int first = row * fColumns;
+    int columns = fColumns;
     Relayout();
+    if (fColumns != columns && top > 0)
+        ScrollTo(0, std::min(MaxScroll(), std::max(0.0f, kPadding + first / fColumns * kCellHeight + offset)));
     Invalidate();
 }
 

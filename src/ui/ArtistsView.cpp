@@ -23,7 +23,7 @@ const rgb_color kLinkColor = {30, 84, 176, 255};
 // ---- ArtistListView ---------------------------------------------------------
 
 ArtistListView::ArtistListView()
-    : BView("artistlist", B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE)
+    : BView("artistlist", B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
 {
     SetViewColor(B_TRANSPARENT_COLOR);
     SetExplicitMinSize(BSize(160, 100));

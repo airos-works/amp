@@ -32,6 +32,8 @@ public:
 
 private:
     void Relayout();
+    float ContentHeight() const;
+    float MaxScroll() const;
     void UpdateScrollBar();
     int CellAt(BPoint where) const;
     BRect CellRect(int index) const;

@@ -255,7 +255,7 @@ private:
 class MiniDiscListView : public BView {
 public:
     MiniDiscListView()
-        : BView("minidisc-tracks", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE)
+        : BView("minidisc-tracks", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
     {
         SetViewColor(B_TRANSPARENT_COLOR);
     }

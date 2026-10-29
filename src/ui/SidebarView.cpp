@@ -18,7 +18,7 @@ const float kHeaderHeight = 22.0f;
 }
 
 SidebarView::SidebarView()
-    : BView("sidebar", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE)
+    : BView("sidebar", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
 {
     SetViewColor(B_TRANSPARENT_COLOR);
     SetExplicitMinSize(BSize(150, 100));

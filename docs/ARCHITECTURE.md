@@ -57,6 +57,12 @@ sibling of the `BScrollView`, so scrolling blits only the rows while the header 
 and stays put. `TrackListView` still owns the columns and hands them to the header through
 `DrawHeader()`/`HeaderMouseDown()`, keeping it in step with `InvalidateHeader()`.
 
+The scrolled views (song list, cover grid, artist list, sidebar, MiniDisc songs) set their
+scroll bars themselves and carry `B_SCROLL_VIEW_AWARE`. Without it `BScrollView::FrameResized`
+sets the range from the target's preferred size, which is nothing, and every resize of the
+window scrolled the view back to the top. When a resize changes the number of columns in the
+cover grid, `AlbumGridView::FrameResized` keeps the album that began the top row at the top.
+
 Button glyphs come from Font Awesome 6 Free. `icons::Init()` copies the font shipped in the
 package into the user font directory and calls `update_font_families()`, so the family is
 available on any Haiku install; `icons::Draw()` centres a glyph on its ink box, since the icons

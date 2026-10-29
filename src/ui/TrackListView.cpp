@@ -25,7 +25,7 @@ const float kArtSize = 128.0f;
 }
 
 TrackListView::TrackListView(const char* name)
-    : BView(name, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE)
+    : BView(name, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
 {
     SetViewColor(B_TRANSPARENT_COLOR);
     fColumns = {
