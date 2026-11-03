@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace amp {
@@ -55,6 +56,9 @@ public:
     void Refresh(bool contents);
     // Queues a write; false when the recorder is busy or gone.
     bool Write(const MiniDiscJob& job);
+    // Writes the songs that the last write did not get to because it failed (added after the
+    // songs on the disc). False when there are none, or the recorder is busy or gone.
+    bool WriteRemaining();
     void Erase();
     // Stops a write after the song being transferred.
     void Cancel();
@@ -65,6 +69,7 @@ public:
 private:
     std::shared_ptr<Shared> fShared;
     std::unique_ptr<NetMDRoster> fRoster;
+    std::thread fWatchdog;   // gives up on a USB transfer that does not finish (a stalled recorder)
 };
 
 } // namespace amp

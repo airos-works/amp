@@ -29,6 +29,10 @@ sends 16-bit 44.1 kHz PCM and the recorder does the ATRAC encoding itself.
 - When a write or an erase has finished, the display shows the outcome for a few seconds
   and a system notification (Amp's icon, the "MiniDisc" title and the outcome in one line)
   says so wherever the window is: covered, on another workspace, minimized.
+- When a write fails partway, Amp offers **Write Remaining Songs**: the songs it did not get to,
+  added after the ones on the disc. If the recorder has to be reconnected first, the display
+  says so ("Waiting to write N songs…", with ✕ to drop them) and Amp asks once more when the
+  recorder is back, since the battery or the disc may have been changed meanwhile.
 
 Capacity: the recorder reports free space in SP time. A song takes its length rounded up to
 whole clusters (2.0434 s each) plus one more cluster, which matches the recorder exactly (five
@@ -73,6 +77,15 @@ written with *Erase and Write* and a mixed playlist (320k MP3, 24-bit 48 kHz FLA
 added after it, both at about 1.6× real time, titled, and read back from the recorder with the
 right lengths. Quitting Amp with the recorder connected leaves it answering.
 
+The same recorder on the owner's Framework 13 laptop (air/OS, battery-powered), 23 songs in SP:
+about 30 minutes. Timing four songs from their conversion files gave about 2.3× real time while
+the audio streams plus about 19 s per song (the secure-session setup before it, and the
+recorder finishing the track and its TOC after it): 1.6× for a 1:29 song, 1.8–1.9× for 2:35
+to 3:14 songs. The converter stays well ahead (about 5 s per song) and the transfer thread spends
+its time waiting for the recorder to take the data, so the recorder sets the pace: in SP it
+encodes the PCM to ATRAC itself. Faster writing would need LP2/LP4, which the computer encodes
+(ATRAC3) and which Amp does not do.
+
 ## Troubleshooting
 
 - **The recorder drops off USB during a write.** Check its battery or AC adapter: a portable
@@ -83,6 +96,16 @@ right lengths. Quitting Amp with the recorder connected leaves it answering.
   not tried again with the fresh battery, so which of the two it was is open.
   `mdtool latency` shows the median time of a control transfer (about 1.4 ms on the working
   port); it also depends on how busy the recorder is, so it is a hint, not a verdict.
+- **"The MiniDisc recorder stopped taking data"** (the write fails, the display says to
+  reconnect). A USB transfer to the recorder has not finished in 30 seconds. A portable does
+  this when its battery runs low: it stays on the bus but takes no more data. On the laptop
+  the 22nd song of 23 stalled after 30 minutes on battery, and the transfer hung for five
+  minutes, because usb_raw waits for a transfer without a time limit and holds the device
+  meanwhile. Amp's watchdog (`Watchdog` in `src/player/MiniDisc.cpp`) gives up on the stuck
+  transfer instead: it reports the write as failed with the songs that are left, and leaves the
+  recorder alone until it is unplugged (which ends the stuck transfer) or the transfer returns
+  after all. Charge the recorder or put in a fresh battery, reconnect it and let Amp write the
+  rest. The songs before the stalled one are on the disc: each is finished on its own.
 - **"The MiniDisc is write-protected"**: slide the record tab on the disc's edge so the hole is
   closed. The disc view warns about it and the sidebar entry shows a lock.
 - **The recorder stops answering after a program was killed while talking to it.** It has to
@@ -95,7 +118,11 @@ right lengths. Quitting Amp with the recorder connected leaves it answering.
   `MDTOOL_LOG=1` prints every command and reply; `mdtool latency` times control transfers.
 - `AMP_NETMD_SIMULATE=4 build-haiku/Amp` adds a simulated recorder (three songs on an
   80-minute disc, uploads at 4× real time) so the whole interface can be tried without
-  hardware.
+  hardware. `AMP_NETMD_SIMULATE_STALL=<upload>[:<seconds>]` makes that upload (counted from 0)
+  stop a third of the way in for that long (60 s by default) and then fail, like a recorder
+  with a flat battery that is unplugged; `AMP_NETMD_STALL_TIMEOUT=<seconds>` shortens the
+  watchdog's 30 seconds. `AMP_NETMD_SIMULATE_STALL=1:20 AMP_NETMD_STALL_TIMEOUT=5` shows the
+  whole failure and retry in half a minute.
 - `python3 tools/make-md-test-library.py DIR` generates albums that cover the conversion
   paths (320k MP3, 24-bit 48 kHz FLAC, mono AAC, Vorbis) and a 96-minute album that does
   not fit on an 80-minute disc.

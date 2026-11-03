@@ -31,6 +31,11 @@ public:
     bool discPresent = true;
     bool writeProtected = false;
     int commands = 0;
+    // A recorder that stops taking data, like a portable whose battery runs low: upload number
+    // `stallUpload` (from 0) blocks a third of the way in for `stallMs`, then fails the way a
+    // transfer cancelled by unplugging fails. -1: never.
+    int stallUpload = -1;
+    int stallMs = 0;
 
 private:
     Bytes Handle(const Bytes& command);
@@ -46,6 +51,8 @@ private:
     Bytes fUploadCommand;
     std::string fPendingTitle;
     double fSpeed;
+    int fUploads = 0;
+    bool fStalled = false;
 };
 
 } // namespace netmd

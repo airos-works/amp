@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <thread>
 #include <unistd.h>
@@ -22,6 +23,16 @@ namespace {
 const int kPollSeconds = 4;
 const char* kSimulatorPath = "simulator";
 const bigtime_t kProgressInterval = 150000; // at most this often, in microseconds
+// One USB transfer that has not finished after this long is stuck: a recorder whose battery runs
+// low stops taking data but stays on the bus, and usb_raw waits for a transfer without a limit
+// (and holds the device for it). A full 64 KB chunk normally goes in well under a second, and
+// the recorder's pauses to write its buffer to the disc take a few seconds at most.
+const bigtime_t kStallTimeout = 30000000;
+// What the user is told when that happens.
+const char* kStalledError = "The MiniDisc recorder stopped taking data and does not answer any more. "
+    "A portable recorder does this when its battery runs low.\n\n"
+    "Charge it or put in a fresh battery, then disconnect the recorder and connect it again.";
+const char* kStalledState = "The recorder stopped responding. Disconnect it and connect it again.";
 
 using Clock = std::chrono::steady_clock;
 
@@ -183,6 +194,20 @@ struct MiniDiscManager::Shared {
     std::atomic<bool> cancel{false};
     bool exited = false;
     std::condition_variable exit;
+    // The watchdog's view of the worker: its USB call in progress (Watch), and what it is doing.
+    struct Watch {
+        // when the call in progress began; 0: none, -1: the watchdog gave up on it
+        std::atomic<bigtime_t> since{0};
+    };
+    std::shared_ptr<Watch> watch;
+    bool needsReconnect = false;   // a worker was given up on: wait until the recorder is free again
+    bool eraseRunning = false;
+    // the running write: its songs and what became of each (kItem*), for a report and a retry
+    std::unique_ptr<MiniDiscJob> running;
+    std::vector<int> itemStatus;
+    int64_t writtenMs = 0;
+    std::unique_ptr<MiniDiscJob> retry;   // the songs a failed write did not get to
+    bool watchdogQuit = false;
 
     void Post(BMessage& message) { target.SendMessage(&message); }
     void PostState()
@@ -200,6 +225,90 @@ struct MiniDiscManager::Shared {
 namespace {
 
 using Shared = MiniDiscManager::Shared;
+
+enum { kItemPending = 0, kItemWritten, kItemSkipped };
+
+// Thrown in a worker the watchdog gave up on, when its stuck call finally returns: the worker
+// unwinds without touching the shared state, which belongs to its replacement by then.
+struct WorkerAbandoned {};
+
+// The transport as a worker uses it: every USB call is timed for the watchdog.
+class WatchedTransport : public netmd::Transport {
+public:
+    WatchedTransport(netmd::Transport& inner, Shared& shared, std::shared_ptr<Shared::Watch> watch)
+        : fInner(inner), fShared(shared), fWatch(std::move(watch))
+    {
+    }
+    ssize_t VendorIn(uint8_t request, void* data, size_t length) override
+    {
+        Begin();
+        ssize_t result = fInner.VendorIn(request, data, length);
+        End();
+        return result;
+    }
+    ssize_t VendorOut(uint8_t request, const void* data, size_t length) override
+    {
+        Begin();
+        ssize_t result = fInner.VendorOut(request, data, length);
+        End();
+        return result;
+    }
+    ssize_t BulkOut(const void* data, size_t length) override
+    {
+        Begin();
+        ssize_t result = fInner.BulkOut(data, length);
+        End();
+        return result;
+    }
+    void Sleep(int milliseconds) override { fInner.Sleep(milliseconds); }
+
+private:
+    void Begin()
+    {
+        bigtime_t idle = 0;
+        if (!fWatch->since.compare_exchange_strong(idle, system_time()))
+            throw WorkerAbandoned();
+    }
+    void End()
+    {
+        if (fWatch->since.exchange(0) != -1)
+            return;
+        fWatch->since = -1;
+        // the stuck call is over (the recorder was unplugged, or answered after all): the
+        // device is free for the worker that took over
+        {
+            std::lock_guard<std::mutex> guard(fShared.lock);
+            fShared.needsReconnect = false;
+            fShared.deviceChanged = true;
+        }
+        fShared.wake.notify_all();
+        throw WorkerAbandoned();
+    }
+
+    netmd::Transport& fInner;
+    Shared& fShared;
+    std::shared_ptr<Shared::Watch> fWatch;
+};
+
+// The songs of `job` a write did not get to, as a job of their own that adds them to the disc.
+std::unique_ptr<MiniDiscJob> RemainingJob(const MiniDiscJob& job, const std::vector<int>& status)
+{
+    std::unique_ptr<MiniDiscJob> rest(new MiniDiscJob);
+    rest->name = job.name;
+    for (size_t i = 0; i < job.items.size() && i < status.size(); i++)
+        if (status[i] == kItemPending)
+            rest->items.push_back(job.items[i]);
+    if (rest->items.empty())
+        rest.reset();
+    return rest;
+}
+
+void AddRemaining(BMessage& message, const std::vector<int>& status)
+{
+    for (size_t i = 0; i < status.size(); i++)
+        if (status[i] == kItemPending)
+            message.AddInt32("remaining", (int32)i);
+}
 
 void ReadState(Shared& shared, netmd::Device& device, bool contents)
 {
@@ -287,6 +396,19 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
         return totalBytes ? std::min(1.0f, (float)(doneBytes + extra) / (float)totalBytes) : 0.0f;
     };
 
+    {
+        std::lock_guard<std::mutex> guard(shared.lock);
+        shared.running.reset(new MiniDiscJob(job));
+        shared.itemStatus.assign(job.items.size(), kItemPending);
+        shared.writtenMs = 0;
+        shared.retry.reset();
+    }
+    auto mark = [&](size_t index, int status) {
+        std::lock_guard<std::mutex> guard(shared.lock);
+        shared.itemStatus[index] = status;
+        shared.writtenMs = writtenMs;
+    };
+
     PostProgress(shared, job, kMDPreparing, 0, "", 0, 0, -1);
     std::unique_ptr<ConversionQueue> conversions(new ConversionQueue(job.items, shared.cancel));
     try {
@@ -338,6 +460,7 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
                 if (firstFailure.empty())
                     firstFailure = item.path + ": " + converted.error;
                 totalBytes -= std::min(totalBytes, sizes[i]);
+                mark(i, kItemSkipped);
                 continue;
             }
             // the real size replaces the estimate
@@ -351,6 +474,7 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
             PcmFileSource source(converted.path);
             if (!source.IsOpen()) {
                 failed++;
+                mark(i, kItemSkipped);
                 continue;
             }
             auto started = Clock::now();
@@ -381,6 +505,7 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
             conversions->Consumed(i);
             written++;
             writtenMs += durationMs;
+            mark(i, kItemWritten);
             int64_t used, total;
             device.Capacity(used, total, leftFrames);
         }
@@ -419,6 +544,12 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
     finished.AddInt64("duration", writtenMs);
     {
         std::lock_guard<std::mutex> guard(shared.lock);
+        // after a failure the songs not written yet can be written later
+        if (!error.empty() && !shared.cancel) {
+            shared.retry = RemainingJob(job, shared.itemStatus);
+            AddRemaining(finished, shared.itemStatus);
+        }
+        shared.running.reset();
         shared.busy = false;
         shared.cancel = false;
         shared.state.busy = false;
@@ -458,13 +589,23 @@ public:
     {
         Close();
         if (path == kSimulatorPath) {
-            if (!fSimulator) {
+            // one simulated recorder for the whole run: a worker that takes over from a stuck
+            // one finds the disc as it was left
+            static std::shared_ptr<netmd::Simulator> simulator;
+            if (!simulator) {
                 const char* speed = getenv("AMP_NETMD_SIMULATE");
-                fSimulator.reset(new netmd::Simulator(speed && atof(speed) > 0 ? atof(speed) : 4.0));
-                fSimulator->discTitle = "Simulated Disc";
-                fSimulator->tracks = {{"Old Song One", 512 * 212, netmd::kEncodingLP2},
+                simulator.reset(new netmd::Simulator(speed && atof(speed) > 0 ? atof(speed) : 4.0));
+                simulator->discTitle = "Simulated Disc";
+                simulator->tracks = {{"Old Song One", 512 * 212, netmd::kEncodingLP2},
                     {"Old Song Two", 512 * 187, netmd::kEncodingLP2}, {"Old Song Three", 512 * 243, netmd::kEncodingSP}};
+                // AMP_NETMD_SIMULATE_STALL=<upload>[:<seconds>]: that upload (from 0) stops partway
+                if (const char* stall = getenv("AMP_NETMD_SIMULATE_STALL")) {
+                    simulator->stallUpload = atoi(stall);
+                    const char* colon = strchr(stall, ':');
+                    simulator->stallMs = (colon ? atoi(colon + 1) : 60) * 1000;
+                }
             }
+            fSimulator = simulator;
             fCurrent = fSimulator.get();
             return true;
         }
@@ -483,7 +624,7 @@ public:
 
 private:
     NetMDUsbTransport fUsb;
-    std::unique_ptr<netmd::Simulator> fSimulator;
+    std::shared_ptr<netmd::Simulator> fSimulator;
     netmd::Transport* fCurrent = nullptr;
 };
 
@@ -492,7 +633,11 @@ void Worker(std::shared_ptr<Shared> shared);
 // Runs the worker and reports its end, so quitting can wait for a clean stop.
 void RunWorker(std::shared_ptr<Shared> shared)
 {
-    Worker(shared);
+    try {
+        Worker(shared);
+    } catch (const WorkerAbandoned&) {
+        return; // another worker has taken over
+    }
     std::lock_guard<std::mutex> guard(shared->lock);
     shared->exited = true;
     shared->exit.notify_all();
@@ -502,6 +647,11 @@ void Worker(std::shared_ptr<Shared> shared)
 {
     WorkerTransport transport;
     std::string openPath;
+    auto watch = std::make_shared<Shared::Watch>();
+    {
+        std::lock_guard<std::mutex> guard(shared->lock);
+        shared->watch = watch;
+    }
     while (true) {
         std::unique_ptr<MiniDiscJob> job;
         bool erase, contents, present;
@@ -517,7 +667,8 @@ void Worker(std::shared_ptr<Shared> shared)
             erase = shared->erase;
             contents = shared->refreshContents || shared->deviceChanged;
             shared->erase = shared->refresh = shared->refreshContents = shared->deviceChanged = false;
-            present = shared->present;
+            // after a stuck call the recorder is left alone until it is free again
+            present = shared->present && !shared->needsReconnect;
             device = shared->device;
         }
         if (!present) {
@@ -564,15 +715,95 @@ void Worker(std::shared_ptr<Shared> shared)
             }
             continue;
         }
-        netmd::Device md(transport.Get());
+        WatchedTransport watched(transport.Get(), *shared, watch);
+        netmd::Device md(watched);
         if (job) {
             RunJob(*shared, md, *job);
             ReadState(*shared, md, true);
         } else if (erase) {
+            {
+                std::lock_guard<std::mutex> guard(shared->lock);
+                shared->eraseRunning = true;
+            }
             RunErase(*shared, md);
+            {
+                std::lock_guard<std::mutex> guard(shared->lock);
+                shared->eraseRunning = false;
+            }
             ReadState(*shared, md, true);
         } else
             ReadState(*shared, md, contents);
+    }
+}
+
+// Gives up on a worker whose USB call has not returned for kStallTimeout: the write or erase
+// it was doing is reported as failed (with the songs it did not get to, for a retry), and a
+// new worker takes over. That one leaves the recorder alone until it is unplugged or the
+// stuck call returns after all; the old worker then unwinds (WorkerAbandoned).
+void Watchdog(std::shared_ptr<Shared> shared)
+{
+    bigtime_t timeout = kStallTimeout;
+    if (const char* seconds = getenv("AMP_NETMD_STALL_TIMEOUT"))
+        if (atof(seconds) > 0)
+            timeout = (bigtime_t)(atof(seconds) * 1000000);
+    std::unique_lock<std::mutex> guard(shared->lock);
+    while (!shared->watchdogQuit) {
+        shared->wake.wait_for(guard, std::chrono::seconds(1), [&] { return shared->watchdogQuit; });
+        if (shared->watchdogQuit || !shared->watch)
+            continue;
+        std::shared_ptr<Shared::Watch> watch = shared->watch;
+        bigtime_t since = watch->since;
+        if (since <= 0 || system_time() - since < timeout)
+            continue;
+        if (!watch->since.compare_exchange_strong(since, -1))
+            continue; // it returned just now
+        fprintf(stderr, "Amp: a USB transfer to the MiniDisc recorder has not finished in %d s; giving up on it\n",
+            (int)(timeout / 1000000));
+        shared->needsReconnect = true;
+        shared->watch.reset();
+        BMessage finished(kMsgMDFinished);
+        bool report = false;
+        if (shared->running) {
+            const MiniDiscJob& job = *shared->running;
+            int written = 0, failed = 0;
+            for (int status : shared->itemStatus) {
+                written += status == kItemWritten;
+                failed += status == kItemSkipped;
+            }
+            finished.AddString("name", job.name.c_str());
+            finished.AddBool("ok", false);
+            finished.AddString("error", kStalledError);
+            finished.AddBool("cancelled", false);
+            finished.AddBool("stalled", true);
+            finished.AddInt32("written", written);
+            finished.AddInt32("failed", failed);
+            finished.AddInt32("count", (int32)job.items.size());
+            finished.AddInt64("duration", shared->writtenMs);
+            shared->retry = RemainingJob(job, shared->itemStatus);
+            AddRemaining(finished, shared->itemStatus);
+            shared->running.reset();
+            report = true;
+        } else if (shared->eraseRunning) {
+            finished.AddBool("erase", true);
+            finished.AddBool("ok", false);
+            finished.AddString("error", kStalledError);
+            shared->eraseRunning = false;
+            report = true;
+        }
+        shared->busy = false;
+        shared->cancel = false;
+        bool connected = shared->state.connected;
+        std::string name = shared->state.deviceName;
+        shared->state = MiniDiscState();
+        shared->state.connected = connected;
+        shared->state.deviceName = name;
+        shared->state.error = kStalledState;
+        std::thread(RunWorker, shared).detach();
+        guard.unlock();
+        if (report)
+            shared->Post(finished);
+        shared->PostState();
+        guard.lock();
     }
 }
 
@@ -592,6 +823,7 @@ void MiniDiscManager::Start(const BMessenger& target)
 {
     fShared->target = target;
     std::thread(RunWorker, fShared).detach();
+    fWatchdog = std::thread(Watchdog, fShared);
     std::shared_ptr<Shared> shared = fShared;
     fRoster.reset(new NetMDRoster());
     fRoster->onAdded = [shared](const NetMDDeviceId& id) {
@@ -615,6 +847,7 @@ void MiniDiscManager::Start(const BMessenger& target)
             if (!shared->present || shared->device.path != path)
                 return;
             shared->present = false;
+            shared->needsReconnect = false; // unplugging ends a stuck call
             shared->deviceChanged = true;
             bool busy = shared->busy;
             shared->state = MiniDiscState();
@@ -645,6 +878,11 @@ void MiniDiscManager::Stop()
     // Let the worker finish the exchange it is in: some recorders stop answering for good
     // when a command is cut off halfway. A transfer that never returns is not waited for.
     fShared->exit.wait_for(guard, std::chrono::seconds(5), [&] { return fShared->exited; });
+    fShared->watchdogQuit = true;
+    guard.unlock();
+    fShared->wake.notify_all();
+    if (fWatchdog.joinable())
+        fWatchdog.join();
 }
 
 MiniDiscState MiniDiscManager::State()
@@ -677,7 +915,7 @@ bool MiniDiscManager::Write(const MiniDiscJob& job)
 {
     {
         std::lock_guard<std::mutex> guard(fShared->lock);
-        if (fShared->busy || !fShared->present)
+        if (fShared->busy || !fShared->present || fShared->needsReconnect)
             return false;
         fShared->job.reset(new MiniDiscJob(job));
         fShared->busy = true;
@@ -689,11 +927,23 @@ bool MiniDiscManager::Write(const MiniDiscJob& job)
     return true;
 }
 
+bool MiniDiscManager::WriteRemaining()
+{
+    std::unique_ptr<MiniDiscJob> rest;
+    {
+        std::lock_guard<std::mutex> guard(fShared->lock);
+        if (!fShared->retry)
+            return false;
+        rest.reset(new MiniDiscJob(*fShared->retry));
+    }
+    return Write(*rest);
+}
+
 void MiniDiscManager::Erase()
 {
     {
         std::lock_guard<std::mutex> guard(fShared->lock);
-        if (fShared->busy || !fShared->present)
+        if (fShared->busy || !fShared->present || fShared->needsReconnect)
             return;
         fShared->erase = true;
         fShared->busy = true;

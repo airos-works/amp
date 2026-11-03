@@ -51,9 +51,12 @@ enum {
     kMsgMDProgress = 'mdpr',          // "phase", "track", "count" int32, "title", "name" string,
                                       // "fraction", "track_fraction" float, "eta" int32 s (-1 unknown)
     kMsgMDFinished = 'mdfn',          // "ok", "cancelled", "full", "erase" bool, "error", "name" string,
-                                      // "written", "failed", "count" int32, "duration" int64 ms
+                                      // "written", "failed", "count" int32, "duration" int64 ms,
+                                      // "remaining" int32[] (songs a failed write did not get to),
+                                      // "stalled" bool (the recorder stopped taking data)
     kMsgWriteToMiniDisc = 'mdwr',     // "tracks" int64[], "name" string, "kind" string (playlist, album, songs)
     kMsgMDCancel = 'mdcn',
+    kMsgMDRetry = 'mdrt',             // an answer to "write the remaining songs?": "which" int32
     kMsgMDErase = 'mder',
     kMsgMDRefresh = 'mdrf',
     kMsgMDClearStatus = 'mdcl',       // the display goes back to the playing song

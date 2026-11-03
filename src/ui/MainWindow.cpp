@@ -1006,10 +1006,21 @@ void MainWindow::MessageReceived(BMessage* message)
         case kMsgPrintLabel:
             OpenLabelWindow(message);
             break;
+        case kMsgMDRetry:
+            // "which": 1 writes the songs a failed write left, now or once the recorder is back
+            fMDRetryPending = message->GetInt32("which", 0) == 1;
+            if (fMDRetryPending)
+                RetryMiniDiscWrite();
+            break;
         case kMsgMDCancel: {
             MiniDiscManager& manager = App()->MiniDisc();
-            if (!manager.Busy())
+            if (!manager.Busy()) {
+                if (fMDRetryPending) { // the ✕ on "Waiting to write…"
+                    fMDRetryPending = false;
+                    fToolbar->RemoveActivity("minidisc");
+                }
                 break;
+            }
             manager.Cancel();
             if (const ToolbarView::Activity* shown = fToolbar->FindActivity("minidisc")) {
                 ToolbarView::Activity status = *shown;
@@ -1028,7 +1039,7 @@ void MainWindow::MessageReceived(BMessage* message)
         case kMsgMDClearStatus:
             delete fMDClearRunner;
             fMDClearRunner = nullptr;
-            if (!App()->MiniDisc().Busy())
+            if (!App()->MiniDisc().Busy() && !fMDRetryPending)
                 fToolbar->RemoveActivity("minidisc");
             break;
         default:

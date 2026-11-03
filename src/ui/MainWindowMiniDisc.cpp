@@ -4,6 +4,7 @@
 #include "App.h"
 #include "core/NetMD.h"
 #include <Alert.h>
+#include <Invoker.h>
 #include <Bitmap.h>
 #include <Button.h>
 #include <Entry.h>
@@ -82,6 +83,24 @@ void MainWindow::MiniDiscChanged()
     bool locked = state.known && state.disc.present && state.disc.writeProtected;
     fSidebar->SetMiniDisc(state.connected, label, state.busy, state.busy ? std::max(0.0f, fMDFraction) : -1, locked);
     fMiniDiscView->SetState(state);
+    if (fMDRetryPending && !state.busy) {
+        // the recorder is back after a failed write: check with the user before going on, the
+        // battery or the disc may have been changed meanwhile
+        bool ready = state.connected && state.known && state.error.empty() && state.disc.present;
+        if (ready) {
+            fMDRetryPending = false;
+            fToolbar->RemoveActivity("minidisc");
+            BString text;
+            text << "The MiniDisc recorder is back";
+            if (!state.disc.title.empty())
+                text << " with " << Quoted(state.disc.title);
+            text << ".\n\nWrite the " << SongCount((int)fMDRetryTitles.size()) << " of "
+                 << (fMDRetryName == "songs" ? BString("the last write") : Quoted(fMDRetryName))
+                 << " that were not written, after the songs on the disc?";
+            OfferMiniDiscRetry(text, true);
+        } else
+            RetryMiniDiscWrite();
+    }
     if (fSource == "minidisc") {
         if (!state.connected && !state.busy) {
             SelectSource("music", 0);
@@ -295,29 +314,84 @@ void MainWindow::StartMiniDiscWrite(BMessage* request)
     job.erase = erase;
     if (!name.empty() && (erase || disc.trackCount == 0))
         job.discTitle = netmd::SanitizeTitle(name);
-    fMDTitles.clear();
+    std::vector<BString> titles;
     std::vector<int64_t> durations;
     for (const Candidate& c : candidates) {
         job.items.push_back(c.item);
-        fMDTitles.push_back(c.display);
+        titles.push_back(c.display);
         durations.push_back(c.item.durationMs);
     }
     if (!manager.Write(job)) {
         Inform("MiniDisc", "The MiniDisc recorder is busy or was disconnected.");
         return;
     }
-    fMDJobName = job.name;
+    fMDRetryPending = false; // a new write replaces songs left over from a failed one
+    BeginMiniDiscDisplay(job.name, titles, durations, erase);
+}
+
+void MainWindow::BeginMiniDiscDisplay(const std::string& jobName, const std::vector<BString>& titles,
+    const std::vector<int64_t>& durations, bool erase)
+{
+    fMDJobName = jobName;
+    fMDTitles = titles;
+    fMDDurations = durations;
     fMDFraction = 0;
     delete fMDClearRunner;
     fMDClearRunner = nullptr;
     fMiniDiscView->BeginWrite(fMDTitles, durations, erase);
     ToolbarView::Activity status = MiniDiscActivity();
-    status.headline << "Writing " << (name.empty() ? BString("songs") : Quoted(name)) << " to the MiniDisc";
+    status.headline << "Writing " << (jobName == "songs" ? BString("songs") : Quoted(jobName)) << " to the MiniDisc";
     status.detail = erase ? "Erasing the disc…" : "Preparing…";
     status.cancelCommand = kMsgMDCancel;
     fToolbar->SetActivity(status);
     fToolbar->ShowPage("minidisc");
     MiniDiscChanged();
+}
+
+void MainWindow::OfferMiniDiscRetry(const BString& text, bool askAgain)
+{
+    BAlert* alert = new BAlert(askAgain ? "MiniDisc Recorder Back" : "MiniDisc", text.String(), "Not Now",
+        askAgain ? "Write Them" : "Write Remaining Songs", nullptr, B_WIDTH_AS_USUAL,
+        askAgain ? B_INFO_ALERT : B_WARNING_ALERT);
+    alert->SetShortcut(0, B_ESCAPE);
+    alert->Go(new BInvoker(new BMessage(kMsgMDRetry), this));
+}
+
+// Writes the songs a failed write did not get to when the recorder can take them; until then
+// the display says what it is waiting for.
+void MainWindow::RetryMiniDiscWrite()
+{
+    if (!fMDRetryPending)
+        return;
+    MiniDiscManager& manager = App()->MiniDisc();
+    MiniDiscState state = manager.State();
+    const netmd::DiscInfo& disc = state.disc;
+    bool ready = state.connected && state.known && state.error.empty() && disc.present && disc.writable
+        && !disc.writeProtected && !manager.Busy();
+    if (!ready) {
+        ToolbarView::Activity status = MiniDiscActivity();
+        status.headline << "Waiting to write " << SongCount((int)fMDRetryTitles.size()) << " to the MiniDisc";
+        if (!state.connected)
+            status.detail = "Connect the MiniDisc recorder.";
+        else if (!state.error.empty())
+            status.detail = "Disconnect the recorder and connect it again.";
+        else if (state.known && !disc.present)
+            status.detail = "Insert the MiniDisc.";
+        else
+            status.detail = "Waiting for the recorder…";
+        status.cancelCommand = kMsgMDCancel;
+        delete fMDClearRunner;
+        fMDClearRunner = nullptr;
+        fToolbar->SetActivity(status);
+        return;
+    }
+    fMDRetryPending = false;
+    if (!manager.WriteRemaining()) {
+        fToolbar->RemoveActivity("minidisc");
+        Inform("MiniDisc", "The MiniDisc recorder is busy or was disconnected.");
+        return;
+    }
+    BeginMiniDiscDisplay(fMDRetryName, fMDRetryTitles, fMDRetryDurations, false);
 }
 
 void MainWindow::MiniDiscProgress(BMessage* message)
@@ -421,10 +495,30 @@ void MainWindow::MiniDiscFinished(BMessage* message)
     fStatus->SetTransient(BString(status.headline) << ". " << status.detail, 10);
     MiniDiscChanged();
 
-    if (!error.IsEmpty()) {
+    std::vector<int32> remaining;
+    int32 index;
+    for (int32 i = 0; message->FindInt32("remaining", i, &index) == B_OK; i++)
+        remaining.push_back(index);
+    if (!error.IsEmpty() && !remaining.empty()) {
+        fMDRetryName = fMDJobName;
+        fMDRetryTitles.clear();
+        fMDRetryDurations.clear();
+        for (int32 i : remaining) {
+            if (i >= 0 && i < (int32)fMDTitles.size())
+                fMDRetryTitles.push_back(fMDTitles[i]);
+            if (i >= 0 && i < (int32)fMDDurations.size())
+                fMDRetryDurations.push_back(fMDDurations[i]);
+        }
         BString text(error);
         if (written > 0)
-            text << "\n\n" << SongCount(written) << " were written before the problem.";
+            text << "\n\n" << SongCount(written) << (written == 1 ? " was" : " were") << " written before the problem.";
+        text << "\n\nAmp can write the other " << SongCount((int)remaining.size())
+             << " after them once the recorder works again.";
+        OfferMiniDiscRetry(text, false);
+    } else if (!error.IsEmpty()) {
+        BString text(error);
+        if (written > 0)
+            text << "\n\n" << SongCount(written) << (written == 1 ? " was" : " were") << " written before the problem.";
         Inform("MiniDisc", text, B_WARNING_ALERT);
     } else if (failed > 0) {
         BString text;

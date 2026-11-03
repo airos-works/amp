@@ -105,6 +105,18 @@ ssize_t Simulator::BulkOut(const void* data, size_t length)
 {
     if (fSpeed > 0)
         std::this_thread::sleep_for(std::chrono::microseconds((int64_t)(length * 1e6 / (kPcmBytesPerSecond * fSpeed))));
+    bool stall;
+    {
+        std::lock_guard<std::mutex> guard(fLock);
+        stall = !fStalled && fReceiving && fUploads - 1 == stallUpload && fReceived * 3 >= fExpected;
+        fStalled = fStalled || stall;
+    }
+    if (stall) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(stallMs));
+        std::lock_guard<std::mutex> guard(fLock);
+        fReceiving = false;
+        return -1;
+    }
     std::lock_guard<std::mutex> guard(fLock);
     if (!fReceiving)
         return -1;
@@ -239,6 +251,7 @@ Bytes Simulator::Handle(const Bytes& c)
                 fExpected = Dword(c, 25);
                 fReceived = 0;
                 fReceiving = true;
+                fUploads++;
                 reply.U8(0x00).Append(Slice(c, 11, 29));
                 Reply(0x0f, reply.Data()); // interim: the final reply follows the data
                 return Bytes();

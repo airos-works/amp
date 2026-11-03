@@ -54,6 +54,13 @@ private:
     void StartMiniDiscWrite(BMessage* request);
     void MiniDiscProgress(BMessage* message);
     void MiniDiscFinished(BMessage* message);
+    // the display, the sidebar and the disc view for a write that has just started
+    void BeginMiniDiscDisplay(const std::string& jobName, const std::vector<BString>& titles,
+        const std::vector<int64_t>& durations, bool erase);
+    // after a failed write: offers the songs it did not get to, and writes them once the recorder
+    // is back (MiniDiscChanged calls it while one is waiting)
+    void OfferMiniDiscRetry(const BString& text, bool askAgain);
+    void RetryMiniDiscWrite();
     void ConfirmMiniDiscErase();
     void ClearMiniDiscStatus(bigtime_t after);
     // Print Label…: an album's, a playlist's or the MiniDisc's label (MainWindowLabel.cpp)
@@ -92,6 +99,12 @@ private:
     // the running MiniDisc write, as the display shows it
     std::string fMDJobName;
     std::vector<BString> fMDTitles;       // library titles of the songs being written
+    std::vector<int64_t> fMDDurations;
+    // the songs a failed write did not get to
+    std::vector<BString> fMDRetryTitles;
+    std::vector<int64_t> fMDRetryDurations;
+    std::string fMDRetryName;
+    bool fMDRetryPending = false;         // the user said yes: write them when the recorder is back
     float fMDFraction = -1;
     class BMessageRunner* fMDClearRunner = nullptr;
     std::map<std::string, class BMessageRunner*> fActivityRunners;
