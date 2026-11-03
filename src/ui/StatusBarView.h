@@ -31,6 +31,7 @@ private:
     BRect ButtonRect(int index) const;
     BRect SettingsRect() const;
     BRect MiniDiscRect() const;
+    void DrawButtonFace(BRect r, bool on);
     void DrawSettingsButton();
     void DrawMiniDiscButton();
 

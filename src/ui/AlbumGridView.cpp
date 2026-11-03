@@ -118,14 +118,14 @@ int AlbumGridView::CellAt(BPoint where) const
 
 void AlbumGridView::Draw(BRect updateRect)
 {
-    SetHighColor(theme::kListBackground);
+    SetHighColor(theme::Colors().listBackground);
     FillRect(updateRect);
     bool active = Window() && Window()->IsActive() && IsFocus();
     if (fAlbums.empty()) {
         BFont font(be_plain_font);
         font.SetSize(14);
         SetFont(&font);
-        SetHighColor(theme::kListSecondaryText);
+        SetHighColor(theme::Colors().listSecondaryText);
         DrawTruncated(this, "No albums", BRect(Bounds().left, Bounds().top + 40, Bounds().right, Bounds().top + 70), B_ALIGN_CENTER, 0);
         return;
     }
@@ -148,20 +148,20 @@ void AlbumGridView::Draw(BRect updateRect)
         if (selected) {
             BRect highlight = cell.InsetByCopy(4, 2);
             if (active)
-                FillRoundGradient(this, highlight, 6, theme::kSelectionTop, theme::kSelectionBottom);
+                FillRoundGradient(this, highlight, 6, theme::Colors().selectionTop, theme::Colors().selectionBottom);
             else
-                FillRoundGradient(this, highlight, 6, theme::kSelectionInactiveTop, theme::kSelectionInactiveBottom);
+                FillRoundGradient(this, highlight, 6, theme::Colors().selectionInactiveTop, theme::Colors().selectionInactiveBottom);
         }
         ArtRequest request = App()->Art().RequestFor(album.artKey, album.artist, album.name, album.localHint, false);
         BBitmap* bitmap = App()->Art().Get(album.artKey, (int)kArt, &request);
         // the cover lies on the page: a soft shadow below it, a hairline to hold a pale cover
         DrawArtworkOnPage(this, bitmap, art);
         SetFont(&bold);
-        SetHighColor(selected ? theme::kSelectedText : theme::kListText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().listText);
         float text = art.bottom + 10; // below the shadow
         DrawTruncated(this, album.name.c_str(), BRect(cell.left + 6, text, cell.right - 6, text + 16), B_ALIGN_CENTER, 0);
         SetFont(&plain);
-        SetHighColor(selected ? theme::kSelectedText : theme::kListSecondaryText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().listSecondaryText);
         DrawTruncated(this, album.artist.c_str(), BRect(cell.left + 6, text + 16, cell.right - 6, text + 32), B_ALIGN_CENTER, 0);
         BString info;
         info << (int)album.trackIds.size() << (album.trackIds.size() == 1 ? " song" : " songs");

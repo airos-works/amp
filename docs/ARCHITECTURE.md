@@ -64,6 +64,16 @@ sets the range from the target's preferred size, which is nothing, and every res
 window scrolled the view back to the top. When a resize changes the number of columns in the
 cover grid, `AlbumGridView::FrameResized` keeps the album that began the top row at the top.
 
+Every colour Amp paints with is a field of `theme::Palette` (`src/ui/Theme.h`), which has a
+light set (the iTunes 8 look) and a dark one. `theme::Colors()` picks the set from the system's
+panel colour on every call; `ui_color()` reads app_server's shared memory, so this is cheap and
+needs no state shared between window threads. On `B_COLORS_UPDATED` the main window calls
+`theme::InvalidateAll()` and every view repaints from the other set. Views paint through
+`theme::Colors()` rather than with literal colours; the exceptions are colours that mean the
+same in both sets (the MiniDisc capacity bar's used/adding fills, the label paper). Text drawn
+in `B_OP_COPY` is smoothed against the low colour, which is white by default, so text on the
+custom-painted views is drawn in `B_OP_OVER`.
+
 Button glyphs come from Font Awesome 6 Free. `icons::Init()` copies the font shipped in the
 package into the user font directory and calls `update_font_families()`, so the family is
 available on any Haiku install; `icons::Draw()` centres a glyph on its ink box, since the icons

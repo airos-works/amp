@@ -331,8 +331,8 @@ void TrackListView::DrawHeader(BView* target, BRect bounds)
     // every row of the header view is painted: a row left out keeps what was on the screen
     // before (the grid's captions showed through under the header, #7)
     BRect header = bounds;
-    FillVerticalGradient(target, header, theme::kHeaderTop, theme::kHeaderBottom);
-    target->SetHighColor(theme::kHeaderBorder);
+    FillVerticalGradient(target, header, theme::Colors().headerTop, theme::Colors().headerBottom);
+    target->SetHighColor(theme::Colors().headerBorder);
     target->StrokeLine(header.LeftBottom(), header.RightBottom());
     BFont font(be_bold_font);
     font.SetSize(11);
@@ -340,17 +340,17 @@ void TrackListView::DrawHeader(BView* target, BRect bounds)
     float left = RowsLeft();
     if (fMode == kGrouped) {
         BRect cell(0, header.top, kArtColumnWidth - 1, header.bottom);
-        target->SetHighColor(theme::kHeaderText);
+        target->SetHighColor(theme::Colors().headerText);
         DrawTruncated(target, "Artwork", cell, B_ALIGN_CENTER, 0);
-        target->SetHighColor(theme::kHeaderBorder);
+        target->SetHighColor(theme::Colors().headerBorder);
         target->StrokeLine(BPoint(cell.right, header.top), BPoint(cell.right, header.bottom));
     }
     for (size_t i = 0; i < fColumns.size(); i++) {
         const Column& c = fColumns[i];
         BRect cell(left, header.top, left + c.width - 1, header.bottom);
         if (fSortField == c.field && fMode == kPlain) {
-            FillVerticalGradient(target, cell, theme::kHeaderSortedTop, theme::kHeaderSortedBottom);
-            target->SetHighColor(theme::kHeaderText);
+            FillVerticalGradient(target, cell, theme::Colors().headerSortedTop, theme::Colors().headerSortedBottom);
+            target->SetHighColor(theme::Colors().headerText);
             float cx = cell.right - 8;
             float cy = (cell.top + cell.bottom) / 2;
             BPoint tri[3];
@@ -361,9 +361,9 @@ void TrackListView::DrawHeader(BView* target, BRect bounds)
             }
             target->FillPolygon(tri, 3);
         }
-        target->SetHighColor(theme::kHeaderText);
+        target->SetHighColor(theme::Colors().headerText);
         DrawTruncated(target, c.title, BRect(cell.left, cell.top, cell.right - (fSortField == c.field ? 14 : 0), cell.bottom), c.align, 4);
-        target->SetHighColor(theme::kHeaderBorder);
+        target->SetHighColor(theme::Colors().headerBorder);
         target->StrokeLine(BPoint(cell.right, header.top + 2), BPoint(cell.right, header.bottom - 1));
         left += c.width;
     }
@@ -375,11 +375,11 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
     const Track* track = library.TrackById(fTracks[row]);
     if (selected) {
         if (active)
-            FillVerticalGradient(this, rect, theme::kSelectionTop, theme::kSelectionBottom);
+            FillVerticalGradient(this, rect, theme::Colors().selectionTop, theme::Colors().selectionBottom);
         else
-            FillVerticalGradient(this, rect, theme::kSelectionInactiveTop, theme::kSelectionInactiveBottom);
+            FillVerticalGradient(this, rect, theme::Colors().selectionInactiveTop, theme::Colors().selectionInactiveBottom);
     } else {
-        SetHighColor(row % 2 ? theme::kListStripe : theme::kListBackground);
+        SetHighColor(row % 2 ? theme::Colors().listStripe : theme::Colors().listBackground);
         FillRect(rect);
     }
     if (!track)
@@ -387,7 +387,7 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
     BFont font(be_plain_font);
     font.SetSize(12);
     SetFont(&font);
-    rgb_color text = selected ? theme::kSelectedText : theme::kListText;
+    rgb_color text = selected ? theme::Colors().selectedText : theme::Colors().listText;
     float left = rect.left;
     bool isCurrent = track->id == fNowPlaying && fNowState != kStopped;
     for (const Column& c : fColumns) {
@@ -397,7 +397,7 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
             if (isCurrent) {
                 // the playing row gets a small speaker, as a Font Awesome glyph
                 icons::Draw(this, icons::kVolume, cell.InsetByCopy(1, 2), cell.Height() - 4,
-                    selected ? theme::kSelectedText : Rgb(60, 60, 60));
+                    selected ? theme::Colors().selectedText : theme::Colors().listIcon);
             }
             continue;
         }
@@ -410,7 +410,7 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
 void TrackListView::DrawGroup(const Group& group, BRect rect)
 {
     BRect cell(0, group.top, kArtColumnWidth - 1, group.top + group.height - 1);
-    SetHighColor(theme::kListBackground);
+    SetHighColor(theme::Colors().listBackground);
     FillRect(cell);
     BRect art((kArtColumnWidth - kArtSize) / 2, group.top + 10, (kArtColumnWidth - kArtSize) / 2 + kArtSize - 1, group.top + 10 + kArtSize - 1);
     ArtRequest request = App()->Art().RequestFor(group.artKey, group.artist, group.name, group.localHint, false);
@@ -420,13 +420,13 @@ void TrackListView::DrawGroup(const Group& group, BRect rect)
     BFont bold(be_bold_font);
     bold.SetSize(12);
     SetFont(&bold);
-    SetHighColor(theme::kListText);
+    SetHighColor(theme::Colors().listText);
     BRect title(cell.left + 6, art.bottom + 9, cell.right - 6, art.bottom + 25); // below the shadow
     DrawTruncated(this, group.name.c_str(), title, B_ALIGN_CENTER, 0);
     BFont plain(be_plain_font);
     plain.SetSize(11);
     SetFont(&plain);
-    SetHighColor(theme::kListSecondaryText);
+    SetHighColor(theme::Colors().listSecondaryText);
     BString artistLine(group.artist.c_str());
     if (group.year > 0)
         artistLine << "  (" << group.year << ")";
@@ -437,11 +437,11 @@ void TrackListView::DrawGroup(const Group& group, BRect rect)
         int row = group.firstRow + group.rowCount;
         for (float y = rowsBottom; y < group.top + group.height; y += theme::kRowHeight, row++) {
             BRect stripe(kArtColumnWidth, y, rect.right, std::min(y + theme::kRowHeight - 1, group.top + group.height - 1));
-            SetHighColor(row % 2 ? theme::kListStripe : theme::kListBackground);
+            SetHighColor(row % 2 ? theme::Colors().listStripe : theme::Colors().listBackground);
             FillRect(stripe);
         }
     }
-    SetHighColor(theme::kListGrid);
+    SetHighColor(theme::Colors().listGrid);
     StrokeLine(BPoint(0, group.top + group.height - 1), BPoint(rect.right, group.top + group.height - 1));
     StrokeLine(BPoint(kArtColumnWidth - 1, group.top), BPoint(kArtColumnWidth - 1, group.top + group.height - 1));
 }
@@ -450,13 +450,13 @@ void TrackListView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
     bool active = Window() && Window()->IsActive() && IsFocus();
-    SetHighColor(theme::kListBackground);
+    SetHighColor(theme::Colors().listBackground);
     FillRect(updateRect);
     if (fTracks.empty()) {
         BFont font(be_plain_font);
         font.SetSize(14);
         SetFont(&font);
-        SetHighColor(theme::kListSecondaryText);
+        SetHighColor(theme::Colors().listSecondaryText);
         DrawTruncated(this, fEmptyText.String(), BRect(bounds.left, bounds.top + 24, bounds.right, bounds.top + 54), B_ALIGN_CENTER, 0);
         return;
     }
@@ -481,7 +481,7 @@ void TrackListView::Draw(BRect updateRect)
     }
     if (fDropIndex >= 0) {
         float y = fDropIndex < (int)fTracks.size() ? RowRect(fDropIndex).top : RowRect((int)fTracks.size() - 1).bottom + 1;
-        SetHighColor(theme::kSelectionBottom);
+        SetHighColor(theme::Colors().accent);
         SetPenSize(2);
         StrokeLine(BPoint(RowsLeft(), y), BPoint(bounds.right, y));
         SetPenSize(1);

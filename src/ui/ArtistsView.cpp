@@ -17,7 +17,6 @@ namespace {
 const float kArtistRowHeight = 40.0f;
 const float kHeaderHeight = 100.0f;    // the picture, its shadow and a margin
 const float kPictureSize = 80.0f;
-const rgb_color kLinkColor = {30, 84, 176, 255};
 }
 
 // ---- ArtistListView ---------------------------------------------------------
@@ -86,7 +85,7 @@ void ArtistListView::ScrollToIndex(int index)
 void ArtistListView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
-    SetHighColor(theme::kListBackground);
+    SetHighColor(theme::Colors().listBackground);
     FillRect(updateRect);
     bool active = Window() && Window()->IsActive() && IsFocus();
     Library& library = App()->GetLibrary();
@@ -105,11 +104,11 @@ void ArtistListView::Draw(BRect updateRect)
         bool selected = artist->id == fSelected;
         if (selected) {
             if (active)
-                FillVerticalGradient(this, row, theme::kSelectionTop, theme::kSelectionBottom);
+                FillVerticalGradient(this, row, theme::Colors().selectionTop, theme::Colors().selectionBottom);
             else
-                FillVerticalGradient(this, row, theme::kSelectionInactiveTop, theme::kSelectionInactiveBottom);
+                FillVerticalGradient(this, row, theme::Colors().selectionInactiveTop, theme::Colors().selectionInactiveBottom);
         } else {
-            SetHighColor(i % 2 ? theme::kListStripe : theme::kListBackground);
+            SetHighColor(i % 2 ? theme::Colors().listStripe : theme::Colors().listBackground);
             FillRect(row);
         }
         BRect art(row.left + 6, row.top + 4, row.left + 37, row.top + 35);
@@ -118,23 +117,23 @@ void ArtistListView::Draw(BRect updateRect)
         if (bitmap)
             DrawBitmapFitted(this, bitmap, art);
         else {
-            FillVerticalGradient(this, art, theme::kArtPlaceholderTop, theme::kArtPlaceholderBottom);
-            icons::DrawFitted(this, icons::kUser, art.InsetByCopy(art.Width() * 0.2f, art.Height() * 0.2f), theme::kArtPlaceholderNote);
+            FillVerticalGradient(this, art, theme::Colors().artPlaceholderTop, theme::Colors().artPlaceholderBottom);
+            icons::DrawFitted(this, icons::kUser, art.InsetByCopy(art.Width() * 0.2f, art.Height() * 0.2f), theme::Colors().artPlaceholderNote);
         }
-        SetHighColor(160, 160, 160);
+        SetHighColor(theme::Colors().artPlaceholderBorder);
         StrokeRect(art);
         SetFont(&bold);
-        SetHighColor(selected ? theme::kSelectedText : theme::kListText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().listText);
         float right = row.right - 6;
         DrawTruncated(this, artist->name.c_str(), BRect(art.right + 8, row.top + 3, right, row.top + 20), B_ALIGN_LEFT, 0);
         SetFont(&plain);
-        SetHighColor(selected ? theme::kSelectedText : theme::kListSecondaryText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().listSecondaryText);
         BString info;
         info << artist->albumCount << (artist->albumCount == 1 ? " album, " : " albums, ") << artist->trackCount
             << (artist->trackCount == 1 ? " song" : " songs");
         DrawTruncated(this, info.String(), BRect(art.right + 8, row.top + 20, right, row.top + 36), B_ALIGN_LEFT, 0);
     }
-    SetHighColor(theme::kSidebarBorder);
+    SetHighColor(theme::Colors().sidebarBorder);
     StrokeLine(BPoint(bounds.right, bounds.top), BPoint(bounds.right, bounds.bottom));
 }
 
@@ -205,8 +204,8 @@ void ArtistHeaderView::SetArtist(int64_t artistId)
 void ArtistHeaderView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
-    FillVerticalGradient(this, bounds, Rgb(245, 245, 245), Rgb(226, 226, 226));
-    SetHighColor(theme::kHeaderBorder);
+    FillVerticalGradient(this, bounds, theme::Colors().pageHeaderTop, theme::Colors().pageHeaderBottom);
+    SetHighColor(theme::Colors().headerBorder);
     StrokeLine(bounds.LeftBottom(), bounds.RightBottom());
     Library& library = App()->GetLibrary();
     Library::Locker locker(library);
@@ -216,7 +215,7 @@ void ArtistHeaderView::Draw(BRect updateRect)
         BFont font(be_plain_font);
         font.SetSize(13);
         SetFont(&font);
-        SetHighColor(theme::kListSecondaryText);
+        SetHighColor(theme::Colors().listSecondaryText);
         DrawTruncated(this, "Select an artist", bounds, B_ALIGN_CENTER, 0);
         return;
     }
@@ -232,7 +231,7 @@ void ArtistHeaderView::Draw(BRect updateRect)
     float nameLeft = art.right + 16;
     BRect nameBox(nameLeft, 14, right, 40);
     // the name is a link: blue and underlined while the pointer is on it or on the picture
-    SetHighColor(fHot ? kLinkColor : theme::kListText);
+    SetHighColor(fHot ? theme::Colors().link : theme::Colors().listText);
     DrawTruncated(this, artist->name.c_str(), nameBox, B_ALIGN_LEFT, 0);
     float nameWidth = std::min(StringWidth(artist->name.c_str()), nameBox.Width());
     font_height height;
@@ -244,7 +243,7 @@ void ArtistHeaderView::Draw(BRect updateRect)
     BFont plain(be_plain_font);
     plain.SetSize(12);
     SetFont(&plain);
-    SetHighColor(theme::kListSecondaryText);
+    SetHighColor(theme::Colors().listSecondaryText);
     BString info;
     info << artist->albumCount << (artist->albumCount == 1 ? " album" : " albums") << ", " << artist->trackCount
         << (artist->trackCount == 1 ? " song" : " songs");

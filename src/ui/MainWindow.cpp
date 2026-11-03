@@ -654,6 +654,12 @@ void MainWindow::MessageReceived(BMessage* message)
     Player& player = App()->GetPlayer();
     Library& library = App()->GetLibrary();
     switch (message->what) {
+        case B_COLORS_UPDATED:
+            // the system switched between light and dark: every view paints from the palette
+            // that goes with the new colours
+            theme::InvalidateAll(this);
+            BWindow::MessageReceived(message);
+            break;
         case kMsgPlayPause:
             player.PlayPause();
             if (player.State() == kStopped && !player.QueueTracks().empty())

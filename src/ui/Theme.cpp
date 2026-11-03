@@ -2,9 +2,11 @@
 #include "Icons.h"
 #include <Bitmap.h>
 #include <Font.h>
+#include <InterfaceDefs.h>
 #include <GradientLinear.h>
 #include <Region.h>
 #include <Shape.h>
+#include <Window.h>
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -13,6 +15,229 @@
 #include <vector>
 
 namespace amp {
+
+namespace theme {
+
+namespace {
+
+Palette LightPalette()
+{
+    Palette p;
+        p.toolbarTop = Rgb(236, 236, 236);
+        p.toolbarBottom = Rgb(176, 176, 176);
+        p.toolbarBorder = Rgb(108, 108, 108);
+        p.toolbarText = Rgb(70, 70, 70);
+        p.toolbarIcon = Rgb(90, 90, 90);
+        p.barHighlight = Rgb(255, 255, 255, 140);
+        p.statusTop = Rgb(226, 226, 226);
+        p.statusBottom = Rgb(190, 190, 190);
+        p.buttonTop = Rgb(251, 251, 251);
+        p.buttonBottom = Rgb(200, 200, 200);
+        p.buttonPressedTop = Rgb(190, 190, 190);
+        p.buttonPressedBottom = Rgb(150, 150, 150);
+        p.buttonOnTop = Rgb(130, 130, 130);
+        p.buttonOnBottom = Rgb(160, 160, 160);
+        p.buttonBorder = Rgb(116, 116, 116);
+        p.buttonShadow = Rgb(0, 0, 0, 40);
+        p.buttonGlyph = Rgb(64, 64, 64);
+        p.buttonOnGlyph = Rgb(255, 255, 255);
+        p.buttonDisabledGlyph = Rgb(155, 155, 155);
+        p.sliderTrackTop = Rgb(150, 150, 150);
+        p.sliderTrackBottom = Rgb(190, 190, 190);
+        p.sliderFillTop = Rgb(96, 96, 96);
+        p.sliderFillBottom = Rgb(130, 130, 130);
+        p.sliderBorder = Rgb(110, 110, 110);
+        p.knobTop = Rgb(250, 250, 250);
+        p.knobBottom = Rgb(190, 190, 190);
+        p.knobBorder = Rgb(100, 100, 100);
+        p.lcdTop = Rgb(232, 237, 226);
+        p.lcdBottom = Rgb(200, 210, 190);
+        p.lcdBorder = Rgb(143, 151, 138);
+        p.lcdText = Rgb(40, 45, 38);
+        p.lcdSecondary = Rgb(90, 98, 86);
+        p.lcdBar = Rgb(120, 130, 115);
+        p.lcdBarBackground = Rgb(180, 190, 172);
+        p.lcdHighlight = Rgb(255, 255, 255, 120);
+        p.lcdInset = Rgb(219, 226, 213);
+        p.lcdButton = Rgb(128, 136, 122);
+        p.lcdButtonPressed = Rgb(80, 88, 76);
+        p.lcdButtonGlyph = Rgb(236, 240, 230);
+        p.lcdKnobTop = Rgb(255, 255, 255);
+        p.lcdKnobBottom = Rgb(206, 212, 200);
+        p.lcdWarning = Rgb(170, 90, 40);
+        p.sidebarBackground = Rgb(214, 221, 229);
+        p.sidebarBorder = Rgb(160, 168, 178);
+        p.sidebarHeader = Rgb(107, 122, 140);
+        p.sidebarText = Rgb(20, 20, 20);
+        p.sidebarIcon = Rgb(70, 90, 120);
+        p.sidebarSelectionTop = Rgb(110, 150, 217);
+        p.sidebarSelectionBottom = Rgb(58, 107, 193);
+        p.sidebarSelectionInactiveTop = Rgb(170, 170, 170);
+        p.sidebarSelectionInactiveBottom = Rgb(140, 140, 140);
+        p.dropFill = Rgb(255, 255, 255, 140);
+        p.accent = Rgb(58, 107, 193);
+        p.listBackground = Rgb(255, 255, 255);
+        p.listStripe = Rgb(237, 243, 254);
+        p.listText = Rgb(0, 0, 0);
+        p.listSecondaryText = Rgb(110, 110, 110);
+        p.listGrid = Rgb(214, 214, 214);
+        p.listIcon = Rgb(60, 60, 60);
+        p.selectionTop = Rgb(97, 140, 219);
+        p.selectionBottom = Rgb(54, 105, 197);
+        p.selectionInactiveTop = Rgb(195, 195, 195);
+        p.selectionInactiveBottom = Rgb(165, 165, 165);
+        p.selectedText = Rgb(255, 255, 255);
+        p.headerTop = Rgb(250, 250, 250);
+        p.headerBottom = Rgb(222, 222, 222);
+        p.headerBorder = Rgb(165, 165, 165);
+        p.headerText = Rgb(40, 40, 40);
+        p.headerSortedTop = Rgb(219, 229, 246);
+        p.headerSortedBottom = Rgb(186, 204, 236);
+        p.pageHeaderTop = Rgb(248, 248, 248);
+        p.pageHeaderBottom = Rgb(226, 227, 230);
+        p.headingText = Rgb(30, 30, 30);
+        p.link = Rgb(30, 84, 176);
+        p.artPlaceholderTop = Rgb(232, 232, 232);
+        p.artPlaceholderBottom = Rgb(200, 200, 200);
+        p.artPlaceholderNote = Rgb(160, 160, 160);
+        p.artPlaceholderBorder = Rgb(170, 170, 170);
+        p.artHairline = Rgb(0, 0, 0, 46);
+        p.capacityTop = Rgb(236, 236, 236);
+        p.capacityBottom = Rgb(208, 208, 208);
+        p.capacityBorder = Rgb(150, 150, 150);
+        p.capacityFree = Rgb(220, 220, 220);
+        p.warning = Rgb(200, 110, 20);
+        p.warningText = Rgb(170, 90, 10);
+        p.success = Rgb(60, 140, 70);
+        p.error = Rgb(200, 40, 30);
+        p.muted = Rgb(150, 150, 150);
+        p.disabledText = Rgb(150, 150, 150);
+    return p;
+}
+
+Palette DarkPalette()
+{
+    Palette p;
+        p.toolbarTop = Rgb(66, 66, 68);
+        p.toolbarBottom = Rgb(40, 40, 42);
+        p.toolbarBorder = Rgb(14, 14, 14);
+        p.toolbarText = Rgb(196, 196, 198);
+        p.toolbarIcon = Rgb(176, 176, 178);
+        p.barHighlight = Rgb(255, 255, 255, 26);
+        p.statusTop = Rgb(54, 54, 56);
+        p.statusBottom = Rgb(38, 38, 40);
+        p.buttonTop = Rgb(92, 92, 94);
+        p.buttonBottom = Rgb(62, 62, 64);
+        p.buttonPressedTop = Rgb(44, 44, 46);
+        p.buttonPressedBottom = Rgb(58, 58, 60);
+        p.buttonOnTop = Rgb(32, 32, 34);
+        p.buttonOnBottom = Rgb(48, 48, 50);
+        p.buttonBorder = Rgb(18, 18, 20);
+        p.buttonShadow = Rgb(0, 0, 0, 90);
+        p.buttonGlyph = Rgb(226, 226, 228);
+        p.buttonOnGlyph = Rgb(132, 180, 255);
+        p.buttonDisabledGlyph = Rgb(110, 110, 112);
+        p.sliderTrackTop = Rgb(24, 24, 26);
+        p.sliderTrackBottom = Rgb(38, 38, 40);
+        p.sliderFillTop = Rgb(176, 176, 178);
+        p.sliderFillBottom = Rgb(140, 140, 142);
+        p.sliderBorder = Rgb(14, 14, 16);
+        p.knobTop = Rgb(212, 212, 214);
+        p.knobBottom = Rgb(150, 150, 152);
+        p.knobBorder = Rgb(18, 18, 20);
+        p.lcdTop = Rgb(52, 56, 50);
+        p.lcdBottom = Rgb(34, 38, 32);
+        p.lcdBorder = Rgb(12, 14, 11);
+        p.lcdText = Rgb(224, 230, 216);
+        p.lcdSecondary = Rgb(156, 164, 148);
+        p.lcdBar = Rgb(176, 186, 166);
+        p.lcdBarBackground = Rgb(22, 25, 20);
+        p.lcdHighlight = Rgb(255, 255, 255, 22);
+        p.lcdInset = Rgb(26, 29, 24);
+        p.lcdButton = Rgb(92, 100, 88);
+        p.lcdButtonPressed = Rgb(132, 140, 126);
+        p.lcdButtonGlyph = Rgb(24, 26, 22);
+        p.lcdKnobTop = Rgb(236, 240, 230);
+        p.lcdKnobBottom = Rgb(176, 184, 168);
+        p.lcdWarning = Rgb(236, 150, 90);
+        p.sidebarBackground = Rgb(36, 38, 42);
+        p.sidebarBorder = Rgb(14, 14, 16);
+        p.sidebarHeader = Rgb(132, 142, 158);
+        p.sidebarText = Rgb(222, 222, 226);
+        p.sidebarIcon = Rgb(140, 164, 200);
+        p.sidebarSelectionTop = Rgb(74, 118, 196);
+        p.sidebarSelectionBottom = Rgb(44, 86, 166);
+        p.sidebarSelectionInactiveTop = Rgb(84, 84, 88);
+        p.sidebarSelectionInactiveBottom = Rgb(66, 66, 70);
+        p.dropFill = Rgb(255, 255, 255, 36);
+        p.accent = Rgb(96, 146, 230);
+        p.listBackground = Rgb(28, 28, 30);
+        p.listStripe = Rgb(36, 38, 44);
+        p.listText = Rgb(232, 232, 234);
+        p.listSecondaryText = Rgb(150, 150, 156);
+        p.listGrid = Rgb(58, 58, 62);
+        p.listIcon = Rgb(200, 200, 204);
+        p.selectionTop = Rgb(74, 118, 196);
+        p.selectionBottom = Rgb(44, 86, 166);
+        p.selectionInactiveTop = Rgb(86, 86, 90);
+        p.selectionInactiveBottom = Rgb(68, 68, 72);
+        p.selectedText = Rgb(255, 255, 255);
+        p.headerTop = Rgb(62, 62, 64);
+        p.headerBottom = Rgb(44, 44, 46);
+        p.headerBorder = Rgb(18, 18, 20);
+        p.headerText = Rgb(214, 214, 216);
+        p.headerSortedTop = Rgb(60, 82, 120);
+        p.headerSortedBottom = Rgb(42, 62, 98);
+        p.pageHeaderTop = Rgb(50, 50, 53);
+        p.pageHeaderBottom = Rgb(36, 36, 38);
+        p.headingText = Rgb(236, 236, 238);
+        p.link = Rgb(120, 170, 245);
+        p.artPlaceholderTop = Rgb(72, 72, 76);
+        p.artPlaceholderBottom = Rgb(52, 52, 56);
+        p.artPlaceholderNote = Rgb(128, 128, 134);
+        p.artPlaceholderBorder = Rgb(22, 22, 24);
+        p.artHairline = Rgb(255, 255, 255, 30);
+        p.capacityTop = Rgb(66, 66, 70);
+        p.capacityBottom = Rgb(50, 50, 54);
+        p.capacityBorder = Rgb(20, 20, 22);
+        p.capacityFree = Rgb(70, 70, 74);
+        p.warning = Rgb(240, 150, 60);
+        p.warningText = Rgb(240, 165, 85);
+        p.success = Rgb(110, 195, 120);
+        p.error = Rgb(255, 110, 100);
+        p.muted = Rgb(110, 110, 114);
+        p.disabledText = Rgb(108, 108, 112);
+    return p;
+}
+
+} // namespace
+
+bool IsDark()
+{
+    return ui_color(B_PANEL_BACKGROUND_COLOR).IsDark();
+}
+
+const Palette& Colors()
+{
+    static const Palette light = LightPalette();
+    static const Palette dark = DarkPalette();
+    return IsDark() ? dark : light;
+}
+
+static void InvalidateTree(BView* view)
+{
+    view->Invalidate();
+    for (BView* child = view->ChildAt(0); child != nullptr; child = child->NextSibling())
+        InvalidateTree(child);
+}
+
+void InvalidateAll(BWindow* window)
+{
+    for (int32 i = 0; BView* view = window->ChildAt(i); i++)
+        InvalidateTree(view);
+}
+
+} // namespace theme
 
 rgb_color Blend(rgb_color a, rgb_color b, float amount)
 {
@@ -141,11 +366,11 @@ void DrawProgressPie(BView* view, BRect rect, float fraction, rgb_color color)
 
 void DrawArtPlaceholder(BView* view, BRect rect)
 {
-    FillVerticalGradient(view, rect, theme::kArtPlaceholderTop, theme::kArtPlaceholderBottom);
-    view->SetHighColor(180, 180, 180);
+    FillVerticalGradient(view, rect, theme::Colors().artPlaceholderTop, theme::Colors().artPlaceholderBottom);
+    view->SetHighColor(theme::Colors().artPlaceholderBorder);
     view->StrokeRect(rect);
     BRect note = rect.InsetByCopy(rect.Width() * 0.25f, rect.Height() * 0.25f);
-    DrawNoteIcon(view, note, theme::kArtPlaceholderNote);
+    DrawNoteIcon(view, note, theme::Colors().artPlaceholderNote);
 }
 
 BRect FittedRect(const BBitmap* bitmap, BRect rect)
@@ -243,15 +468,15 @@ BRect DrawArtworkOnPage(BView* view, const BBitmap* bitmap, BRect rect, bool art
     if (bitmap)
         DrawBitmapFitted(view, bitmap, rect);
     else if (artist) {
-        FillVerticalGradient(view, shown, theme::kArtPlaceholderTop, theme::kArtPlaceholderBottom);
+        FillVerticalGradient(view, shown, theme::Colors().artPlaceholderTop, theme::Colors().artPlaceholderBottom);
         icons::DrawFitted(view, icons::kUser, shown.InsetByCopy(shown.Width() * 0.22f, shown.Height() * 0.22f),
-            theme::kArtPlaceholderNote);
+            theme::Colors().artPlaceholderNote);
     } else
         DrawArtPlaceholder(view, shown);
-    // a hairline holds a pale picture together on the white page
+    // a hairline holds a picture together on the page: a pale one on white, a dark one on black
     view->SetDrawingMode(B_OP_ALPHA);
     view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_OVERLAY);
-    view->SetHighColor(0, 0, 0, 46);
+    view->SetHighColor(theme::Colors().artHairline);
     view->StrokeRect(shown);
     view->PopState();
     return shown;

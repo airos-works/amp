@@ -113,7 +113,8 @@ public:
     {
         BRect bounds = Bounds();
         BRect top(bounds.left, bounds.top, bounds.right, bounds.bottom - kColumnHeaderHeight);
-        FillVerticalGradient(this, top, Rgb(252, 252, 252), Rgb(228, 230, 234));
+        const theme::Palette& colors = theme::Colors();
+        FillVerticalGradient(this, top, colors.pageHeaderTop, colors.pageHeaderBottom);
         BRect icon(22, 18, 22 + 74, 18 + 74);
         DrawMiniDisc(this, icon, Rgb(62, 84, 122), Rgb(176, 182, 190), true);
 
@@ -143,10 +144,10 @@ public:
                 counts << ", " << netmd::FormatFrames(disc.usedFrames).c_str();
         }
         SetFont(&title);
-        SetHighColor(Rgb(30, 30, 30));
+        SetHighColor(colors.headingText);
         DrawTruncated(this, heading.String(), BRect(textLeft, 18, textRight, 42), B_ALIGN_LEFT, 0);
         SetFont(&plain);
-        SetHighColor(theme::kListSecondaryText);
+        SetHighColor(theme::Colors().listSecondaryText);
         // a reason recording cannot work is worth more than the recorder's name
         const char* warningText = nullptr;
         if (fState.connected && fState.known && disc.present && disc.writeProtected)
@@ -156,8 +157,8 @@ public:
         if (warningText) {
             BRect warning(textLeft, 42, textRight, 58);
             icons::Draw(this, icons::kWarning, BRect(warning.left, warning.top + 2, warning.left + 13, warning.bottom - 2),
-                10, Rgb(200, 110, 20));
-            SetHighColor(Rgb(170, 90, 10));
+                10, colors.warning);
+            SetHighColor(colors.warningText);
             DrawTruncated(this, warningText, BRect(warning.left + 17, warning.top, warning.right, warning.bottom), B_ALIGN_LEFT, 0);
         } else
             DrawTruncated(this, detail.String(), BRect(textLeft, 42, textRight, 58), B_ALIGN_LEFT, 0);
@@ -167,20 +168,20 @@ public:
 
         // column header, in the style of the song list's
         BRect header(bounds.left, bounds.bottom - kColumnHeaderHeight + 1, bounds.right, bounds.bottom);
-        FillVerticalGradient(this, header, theme::kHeaderTop, theme::kHeaderBottom);
-        SetHighColor(theme::kHeaderBorder);
+        FillVerticalGradient(this, header, theme::Colors().headerTop, theme::Colors().headerBottom);
+        SetHighColor(theme::Colors().headerBorder);
         StrokeLine(header.LeftTop(), header.RightTop());
         StrokeLine(header.LeftBottom(), header.RightBottom());
         Columns columns(bounds.Width());
         BFont small(be_plain_font);
         small.SetSize(11);
         SetFont(&small);
-        SetHighColor(theme::kHeaderText);
+        SetHighColor(theme::Colors().headerText);
         DrawTruncated(this, "#", BRect(columns.number, header.top, columns.name, header.bottom), B_ALIGN_RIGHT, 8);
         DrawTruncated(this, "Name", BRect(columns.name, header.top, columns.time, header.bottom), B_ALIGN_LEFT, 6);
         DrawTruncated(this, "Time", BRect(columns.time, header.top, columns.mode, header.bottom), B_ALIGN_RIGHT, 8);
         DrawTruncated(this, "Mode", BRect(columns.mode, header.top, columns.right, header.bottom), B_ALIGN_LEFT, 8);
-        SetHighColor(theme::kHeaderBorder);
+        SetHighColor(theme::Colors().headerBorder);
         for (float x : {columns.name, columns.time, columns.mode})
             StrokeLine(BPoint(x, header.top + 3), BPoint(x, header.bottom - 3));
     }
@@ -202,11 +203,12 @@ private:
         adding = std::min(adding, total - used);
         float usedEnd = bar.left + (float)(bar.Width() * used / total);
         float addEnd = usedEnd + (float)(bar.Width() * adding / total);
+        const theme::Palette& colors = theme::Colors();
         SetHighColor(0, 0, 0, 30);
         SetDrawingMode(B_OP_ALPHA);
         FillRoundRect(bar.OffsetByCopy(0, 1), 5, 5);
         SetDrawingMode(B_OP_COPY);
-        FillRoundGradient(this, bar, 5, Rgb(236, 236, 236), Rgb(208, 208, 208));
+        FillRoundGradient(this, bar, 5, colors.capacityTop, colors.capacityBottom);
         BRegion clip(bar);
         ConstrainClippingRegion(&clip);
         if (usedEnd > bar.left)
@@ -214,7 +216,7 @@ private:
         if (addEnd > usedEnd + 0.5f)
             FillVerticalGradient(this, BRect(usedEnd, bar.top, addEnd, bar.bottom), Rgb(250, 196, 110), Rgb(222, 140, 40));
         ConstrainClippingRegion(nullptr);
-        SetHighColor(150, 150, 150);
+        SetHighColor(colors.capacityBorder);
         StrokeRoundRect(bar, 5, 5);
 
         BFont small(be_plain_font);
@@ -230,7 +232,7 @@ private:
             StrokeRoundRect(swatch, 2, 2);
             BString text;
             text << label << " " << netmd::FormatFrames((int64_t)frames).c_str();
-            SetHighColor(theme::kListSecondaryText);
+            SetHighColor(theme::Colors().listSecondaryText);
             SetDrawingMode(B_OP_OVER);
             DrawString(text.String(), BPoint(x + 14, y + 8.5f));
             x += 14 + StringWidth(text.String()) + 18;
@@ -238,7 +240,7 @@ private:
         legend(Rgb(80, 128, 208), "Used", used);
         if (adding > 0)
             legend(Rgb(236, 168, 72), "Adding", adding);
-        legend(Rgb(220, 220, 220), "Free", std::max(0.0, total - used - adding));
+        legend(colors.capacityFree, "Free", std::max(0.0, total - used - adding));
         BString mode("Space in SP (stereo) time");
         DrawTruncated(this, mode.String(), BRect(x, y - 3, bar.right, y + 12), B_ALIGN_RIGHT, 0);
     }
@@ -284,7 +286,7 @@ public:
     void Draw(BRect updateRect) override
     {
         BRect bounds = Bounds();
-        SetHighColor(theme::kListBackground);
+        SetHighColor(theme::Colors().listBackground);
         FillRect(updateRect);
         int existing = ShownTracks();
         int rows = existing + (int)fPending.size();
@@ -298,7 +300,7 @@ public:
                 text = "Reading the song list…";
             else if (fState.connected && fState.known && fState.disc.present)
                 text = "This MiniDisc is empty. Drag songs, an album or a playlist here to write them to it.";
-            SetHighColor(theme::kListSecondaryText);
+            SetHighColor(theme::Colors().listSecondaryText);
             DrawTruncated(this, text.String(), BRect(bounds.left, bounds.top + 30, bounds.right, bounds.top + 50), B_ALIGN_CENTER, 12);
             return;
         }
@@ -307,11 +309,11 @@ public:
         for (int row = first; row <= last; row++) {
             BRect rect(bounds.left, row * theme::kRowHeight, bounds.right, (row + 1) * theme::kRowHeight - 1);
             if (row % 2 == 1) {
-                SetHighColor(theme::kListStripe);
+                SetHighColor(theme::Colors().listStripe);
                 FillRect(rect);
             }
             BString number, name, time, mode;
-            rgb_color text = theme::kListText;
+            rgb_color text = theme::Colors().listText;
             number << row + 1;
             if (row < existing) {
                 const netmd::TrackInfo& track = fState.disc.tracks[row];
@@ -319,27 +321,27 @@ public:
                 time = netmd::FormatFrames(track.frames).c_str();
                 mode = EncodingName(track);
                 if (track.title.empty())
-                    text = theme::kListSecondaryText;
+                    text = theme::Colors().listSecondaryText;
             } else {
                 const PendingRow& pending = fPending[row - existing];
                 name = pending.title;
                 time = FormatDuration(pending.durationMs).c_str();
                 mode = pending.state == 1 ? "Converting…" : pending.state == 2 ? "Writing…" : pending.state == 3 ? "SP" : "Waiting";
                 if (pending.state == 0)
-                    text = theme::kListSecondaryText;
+                    text = theme::Colors().listSecondaryText;
                 BRect status(columns.number + 6, rect.top + 3, columns.number + 18, rect.top + 15);
                 if (pending.state == 1 || pending.state == 2) {
                     DrawProgressPie(this, status, pending.fraction,
-                        pending.state == 1 ? Rgb(150, 150, 150) : theme::kSidebarSelectionBottom);
+                        pending.state == 1 ? theme::Colors().muted : theme::Colors().accent);
                 } else if (pending.state == 3)
-                    icons::Draw(this, icons::kCheck, status, 10, Rgb(60, 140, 70));
+                    icons::Draw(this, icons::kCheck, status, 10, theme::Colors().success);
             }
-            SetHighColor(theme::kListSecondaryText);
+            SetHighColor(theme::Colors().listSecondaryText);
             DrawTruncated(this, number.String(), BRect(columns.number, rect.top, columns.name, rect.bottom), B_ALIGN_RIGHT, 8);
             SetHighColor(text);
             DrawTruncated(this, name.String(), BRect(columns.name, rect.top, columns.time, rect.bottom), B_ALIGN_LEFT, 6);
             DrawTruncated(this, time.String(), BRect(columns.time, rect.top, columns.mode, rect.bottom), B_ALIGN_RIGHT, 8);
-            SetHighColor(theme::kListSecondaryText);
+            SetHighColor(theme::Colors().listSecondaryText);
             DrawTruncated(this, mode.String(), BRect(columns.mode, rect.top, columns.right, rect.bottom), B_ALIGN_LEFT, 8);
         }
     }

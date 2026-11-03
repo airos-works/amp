@@ -62,6 +62,9 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
 - The toolbar, status bar, sidebar and list buttons draw their glyphs from Font Awesome 6
   Free (SIL OFL 1.1, icons CC BY 4.0). The font ships inside the package and is registered with
   the font server on first run, so the buttons look the same on a bare Haiku install.
+- Dark mode: when the system's panels are dark (Appearance preferences), the whole window
+  (toolbar, display, sidebar, lists, headers, MiniDisc pane) and the Quick Look panel switch
+  to a dark palette, and back again, as soon as the colours change; no restart is needed.
 
 ## Building on Haiku R1/beta6
 

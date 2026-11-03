@@ -102,27 +102,23 @@ BRect StatusBarView::SettingsRect() const
 void StatusBarView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
-    FillVerticalGradient(this, bounds, Rgb(226, 226, 226), Rgb(190, 190, 190));
-    SetHighColor(theme::kToolbarBorder);
+    const theme::Palette& colors = theme::Colors();
+    FillVerticalGradient(this, bounds, colors.statusTop, colors.statusBottom);
+    SetHighColor(colors.toolbarBorder);
     StrokeLine(bounds.LeftTop(), bounds.RightTop());
     for (int i = 0; i < 3; i++) {
         BRect r = ButtonRect(i);
         bool active = (i == 1 && fShuffle) || (i == 2 && fRepeat != 0);
         bool pressed = fPressed == (Hot)(i + 1);
-        if (active || pressed)
-            FillRoundGradient(this, r, 4, Rgb(140, 140, 140), Rgb(170, 170, 170));
-        else
-            FillRoundGradient(this, r, 4, Rgb(250, 250, 250), Rgb(205, 205, 205));
-        SetHighColor(120, 120, 120);
-        StrokeRoundRect(r, 4, 4);
+        DrawButtonFace(r, active || pressed);
         icons::Icon glyph = i == 0 ? icons::kPlus : (i == 1 ? icons::kShuffle : icons::kRepeat);
-        icons::Draw(this, glyph, r, 11, active ? Rgb(255, 255, 255) : Rgb(60, 60, 60));
+        icons::Draw(this, glyph, r, 11, active ? colors.buttonOnGlyph : colors.buttonGlyph);
         if (i == 2 && fRepeat == 2) {
             // repeat one: a small marker on the repeat glyph
             BFont small(be_bold_font);
             small.SetSize(8);
             SetFont(&small);
-            SetHighColor(active ? Rgb(255, 255, 255) : Rgb(60, 60, 60));
+            SetHighColor(active ? colors.buttonOnGlyph : colors.buttonGlyph);
             SetDrawingMode(B_OP_OVER);
             float cx = (r.left + r.right) / 2;
             float cy = (r.top + r.bottom) / 2;
@@ -132,7 +128,7 @@ void StatusBarView::Draw(BRect updateRect)
     BFont font(be_plain_font);
     font.SetSize(11);
     SetFont(&font);
-    SetHighColor(theme::kToolbarText);
+    SetHighColor(colors.toolbarText);
     BString center = fTransient.IsEmpty() ? fSummary : fTransient;
     // the MiniDisc and Settings buttons own the right-hand end: keep the summary clear of them
     float centerRight = (fMiniDiscVisible ? MiniDiscRect().left : SettingsRect().left) - 24;
@@ -144,24 +140,32 @@ void StatusBarView::Draw(BRect updateRect)
         DrawMiniDiscButton();
 }
 
+// A button's rounded face and its outline, held down or switched on when `on`.
+void StatusBarView::DrawButtonFace(BRect r, bool on)
+{
+    const theme::Palette& colors = theme::Colors();
+    if (on)
+        FillRoundGradient(this, r, 4, colors.buttonOnTop, colors.buttonOnBottom);
+    else
+        FillRoundGradient(this, r, 4, colors.buttonTop, colors.buttonBottom);
+    SetHighColor(colors.buttonBorder);
+    StrokeRoundRect(r, 4, 4);
+}
+
 void StatusBarView::DrawMiniDiscButton()
 {
     BRect r = MiniDiscRect();
     bool pressed = fPressed == kMiniDisc;
-    if (pressed)
-        FillRoundGradient(this, r, 4, Rgb(140, 140, 140), Rgb(170, 170, 170));
-    else
-        FillRoundGradient(this, r, 4, Rgb(250, 250, 250), Rgb(205, 205, 205));
-    SetHighColor(120, 120, 120);
-    StrokeRoundRect(r, 4, 4);
-    rgb_color ink = !fMiniDiscEnabled ? Rgb(160, 160, 160) : pressed ? Rgb(255, 255, 255) : Rgb(70, 70, 70);
+    const theme::Palette& colors = theme::Colors();
+    DrawButtonFace(r, pressed);
+    rgb_color ink = !fMiniDiscEnabled ? colors.buttonDisabledGlyph : pressed ? colors.buttonOnGlyph : colors.buttonGlyph;
     float cy = (r.top + r.bottom) / 2;
     DrawMiniDisc(this, BRect(r.left + 6, cy - 6, r.left + 18, cy + 6), ink,
-        pressed ? Rgb(155, 155, 155) : Rgb(228, 228, 228));
+        pressed ? Blend(colors.buttonOnTop, colors.buttonOnBottom, 0.5f) : Blend(colors.buttonTop, colors.buttonBottom, 0.5f));
     BFont font(be_plain_font);
     font.SetSize(11);
     SetFont(&font);
-    SetHighColor(!fMiniDiscEnabled ? Rgb(150, 150, 150) : pressed ? Rgb(255, 255, 255) : theme::kToolbarText);
+    SetHighColor(!fMiniDiscEnabled ? colors.disabledText : pressed ? colors.buttonOnGlyph : colors.toolbarText);
     SetDrawingMode(B_OP_OVER);
     DrawTruncated(this, "Write to MiniDisc", BRect(r.left + 22, r.top, r.right - 4, r.bottom), B_ALIGN_LEFT, 0);
     SetDrawingMode(B_OP_COPY);
@@ -171,22 +175,18 @@ void StatusBarView::DrawSettingsButton()
 {
     BRect r = SettingsRect();
     bool pressed = fPressed == kSettings;
-    if (pressed)
-        FillRoundGradient(this, r, 4, Rgb(140, 140, 140), Rgb(170, 170, 170));
-    else
-        FillRoundGradient(this, r, 4, Rgb(250, 250, 250), Rgb(205, 205, 205));
-    SetHighColor(120, 120, 120);
-    StrokeRoundRect(r, 4, 4);
+    const theme::Palette& colors = theme::Colors();
+    DrawButtonFace(r, pressed);
 
     // the Font Awesome gear, centred on its ink
     float cy = (r.top + r.bottom) / 2;
     icons::Draw(this, icons::kGear, BRect(r.left + 5, cy - 7, r.left + 19, cy + 7), 13,
-        pressed ? Rgb(255, 255, 255) : Rgb(70, 70, 70));
+        pressed ? colors.buttonOnGlyph : colors.buttonGlyph);
 
     BFont font(be_plain_font);
     font.SetSize(11);
     SetFont(&font);
-    SetHighColor(pressed ? Rgb(255, 255, 255) : theme::kToolbarText);
+    SetHighColor(pressed ? colors.buttonOnGlyph : colors.toolbarText);
     SetDrawingMode(B_OP_OVER);
     DrawTruncated(this, "Settings", BRect(r.left + 22, r.top, r.right - 6, r.bottom), B_ALIGN_LEFT, 0);
     SetDrawingMode(B_OP_COPY);

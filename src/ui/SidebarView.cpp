@@ -119,7 +119,7 @@ int SidebarView::ItemAt(BPoint where) const
 
 void SidebarView::DrawIcon(const Item& item, BRect rect, bool selected)
 {
-    rgb_color color = selected ? Rgb(255, 255, 255) : Rgb(70, 90, 120);
+    rgb_color color = selected ? theme::Colors().selectedText : theme::Colors().sidebarIcon;
     float size = rect.Height() * 0.9f;
     if (item.source == "music") {
         icons::Draw(this, icons::kMusic, rect, size, color);
@@ -129,7 +129,7 @@ void SidebarView::DrawIcon(const Item& item, BRect rect, bool selected)
         icons::Draw(this, icons::kAlbum, rect, size, color);
     } else if (item.source == "minidisc") {
         DrawMiniDisc(this, rect.InsetByCopy(0.5f, 0.5f), color,
-            selected ? theme::kSidebarSelectionBottom : theme::kSidebarBackground);
+            selected ? theme::Colors().sidebarSelectionBottom : theme::Colors().sidebarBackground);
     } else {
         icons::Draw(this, icons::kList, rect, size, color);
     }
@@ -138,9 +138,9 @@ void SidebarView::DrawIcon(const Item& item, BRect rect, bool selected)
 void SidebarView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
-    SetHighColor(theme::kSidebarBackground);
+    SetHighColor(theme::Colors().sidebarBackground);
     FillRect(bounds);
-    SetHighColor(theme::kSidebarBorder);
+    SetHighColor(theme::Colors().sidebarBorder);
     StrokeLine(BPoint(bounds.right, bounds.top), BPoint(bounds.right, bounds.bottom));
     bool active = Window() && Window()->IsActive();
     BFont header(be_bold_font);
@@ -157,40 +157,40 @@ void SidebarView::Draw(BRect updateRect)
             continue;
         if (item.header) {
             SetFont(&header);
-            SetHighColor(theme::kSidebarHeader);
+            SetHighColor(theme::Colors().sidebarHeader);
             DrawTruncated(this, item.label.String(), BRect(rect.left + 8, rect.top + 2, rect.right, rect.bottom), B_ALIGN_LEFT, 0);
             continue;
         }
         bool selected = item.source == fSelectedSource && (item.source != "playlist" || item.playlistId == fSelectedPlaylist);
         if (selected) {
             if (active)
-                FillVerticalGradient(this, rect, theme::kSidebarSelectionTop, theme::kSidebarSelectionBottom);
+                FillVerticalGradient(this, rect, theme::Colors().sidebarSelectionTop, theme::Colors().sidebarSelectionBottom);
             else
-                FillVerticalGradient(this, rect, theme::kSidebarSelectionInactiveTop, theme::kSidebarSelectionInactiveBottom);
+                FillVerticalGradient(this, rect, theme::Colors().sidebarSelectionInactiveTop, theme::Colors().sidebarSelectionInactiveBottom);
         } else if ((int)i == fDropIndex) {
-            SetHighColor(255, 255, 255, 140);
+            SetHighColor(theme::Colors().dropFill);
             SetDrawingMode(B_OP_ALPHA);
             FillRect(rect);
             SetDrawingMode(B_OP_COPY);
-            SetHighColor(theme::kSidebarSelectionBottom);
+            SetHighColor(theme::Colors().accent);
             StrokeRect(rect);
         }
         BRect icon(rect.left + 12, rect.top + 3, rect.left + 26, rect.bottom - 3);
         DrawIcon(item, icon, selected);
         SetFont(selected ? &bold : &plain);
-        SetHighColor(selected ? theme::kSelectedText : theme::kSidebarText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().sidebarText);
         float right = rect.right - 4;
         if (item.source == "minidisc" && fMiniDiscBusy) {
             BRect pie(rect.right - 20, rect.top + 3, rect.right - 7, rect.top + 16);
             DrawProgressPie(this, pie, std::max(0.0f, fMiniDiscFraction),
-                selected ? theme::kSelectedText : theme::kSidebarSelectionBottom);
+                selected ? theme::Colors().selectedText : theme::Colors().accent);
             right = pie.left - 4;
         } else if (item.source == "minidisc" && fMiniDiscLocked) {
             BRect lock(rect.right - 18, rect.top + 3, rect.right - 6, rect.top + 16);
-            icons::Draw(this, icons::kLock, lock, 10, selected ? theme::kSelectedText : theme::kSidebarHeader);
+            icons::Draw(this, icons::kLock, lock, 10, selected ? theme::Colors().selectedText : theme::Colors().sidebarHeader);
             right = lock.left - 4;
         }
-        SetHighColor(selected ? theme::kSelectedText : theme::kSidebarText);
+        SetHighColor(selected ? theme::Colors().selectedText : theme::Colors().sidebarText);
         DrawTruncated(this, item.label.String(), BRect(rect.left + 32, rect.top, right, rect.bottom), B_ALIGN_LEFT, 0);
     }
 }

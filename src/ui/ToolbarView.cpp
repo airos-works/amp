@@ -230,16 +230,17 @@ void ToolbarView::DrawPager(BRect r)
     // a small round button with an arrow, like the one iTunes shows when the display has more to say
     BRect pager = PagerRect();
     bool pressed = fTracking && fPressed == kPager;
-    SetHighColor(pressed ? Rgb(96, 104, 92) : Blend(theme::kLcdSecondary, theme::kLcdBottom, 0.25f));
+    const theme::Palette& colors = theme::Colors();
+    SetHighColor(pressed ? colors.lcdButtonPressed : colors.lcdButton);
     FillEllipse(pager);
-    icons::Draw(this, icons::kChevronRight, pager.OffsetByCopy(0.5f, 0), 7.5f, Rgb(236, 240, 230));
+    icons::Draw(this, icons::kChevronRight, pager.OffsetByCopy(0.5f, 0), 7.5f, colors.lcdButtonGlyph);
     // one dot per page, the page on show filled
     if (count > 6)
         return;
     int shown = ShownIndex();
     for (int i = 0; i < count; i++) {
         BRect dot = PageDotRect(i, count);
-        SetHighColor(i == shown ? theme::kLcdText : Blend(theme::kLcdSecondary, theme::kLcdBottom, 0.45f));
+        SetHighColor(i == shown ? colors.lcdText : Blend(colors.lcdSecondary, colors.lcdBottom, 0.45f));
         FillEllipse(dot);
     }
 }
@@ -254,17 +255,18 @@ static float BarRadius(BRect bar)
 
 void ToolbarView::DrawActivity(const Activity& activity, BRect r)
 {
+    const theme::Palette& colors = theme::Colors();
     switch (activity.kind) {
         case kActivityMiniDisc:
             DrawMiniDisc(this, fArtRect.InsetByCopy(2, 2), Rgb(62, 84, 122), Rgb(176, 182, 190), true);
             break;
         case kActivityScan: {
             BRect tile = fArtRect.InsetByCopy(3, 3);
-            SetHighColor(Blend(theme::kLcdBottom, Rgb(255, 255, 255), 0.35f));
+            SetHighColor(colors.lcdInset);
             FillRoundRect(tile, 5, 5);
-            SetHighColor(Blend(theme::kLcdBorder, theme::kLcdBottom, 0.3f));
+            SetHighColor(Blend(theme::Colors().lcdBorder, theme::Colors().lcdBottom, 0.3f));
             StrokeRoundRect(tile, 5, 5);
-            icons::Draw(this, icons::kFolder, tile, 17, theme::kLcdSecondary);
+            icons::Draw(this, icons::kFolder, tile, 17, theme::Colors().lcdSecondary);
             break;
         }
     }
@@ -275,39 +277,39 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
     BFont plain(be_plain_font);
     plain.SetSize(11);
     SetFont(&bold);
-    SetHighColor(theme::kLcdText);
+    SetHighColor(theme::Colors().lcdText);
     DrawTruncated(this, activity.headline.String(), textArea, B_ALIGN_CENTER, 0);
     SetFont(&plain);
-    SetHighColor(theme::kLcdSecondary);
+    SetHighColor(theme::Colors().lcdSecondary);
     DrawTruncated(this, activity.detail.String(), BRect(textArea.left, r.top + 19, textArea.right, r.top + 34), B_ALIGN_CENTER, 0);
 
     // the bar: filled to the fraction, or moving stripes while the length is unknown
     BRect bar = fProgressRect;
     float radius = BarRadius(bar);
-    SetHighColor(theme::kLcdBarBackground);
+    SetHighColor(theme::Colors().lcdBarBackground);
     FillRoundRect(bar, radius, radius);
     if (activity.fraction >= 0 || activity.done) {
         float fraction = activity.done ? 1.0f : std::min(1.0f, activity.fraction);
         float right = floorf(bar.left + bar.Width() * fraction);
         if (right > bar.left + 1)
             FillRoundGradient(this, BRect(bar.left, bar.top, right, bar.bottom), radius,
-                Blend(theme::kLcdBar, Rgb(255, 255, 255), 0.12f), theme::kLcdBar);
+                Blend(colors.lcdBar, Rgb(255, 255, 255), 0.12f), colors.lcdBar);
     } else {
         BRegion clip(bar.InsetByCopy(1, 0));
         ConstrainClippingRegion(&clip);
-        SetHighColor(theme::kLcdBar);
+        SetHighColor(theme::Colors().lcdBar);
         for (float x = bar.left - 12 + fStripePhase; x < bar.right + 12; x += 12) {
             BPoint stripe[4] = {BPoint(x, bar.bottom), BPoint(x + 5, bar.top), BPoint(x + 10, bar.top), BPoint(x + 5, bar.bottom)};
             FillPolygon(stripe, 4);
         }
         ConstrainClippingRegion(nullptr);
     }
-    SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.1f));
+    SetHighColor(Blend(theme::Colors().lcdBorder, Rgb(0, 0, 0), 0.1f));
     StrokeRoundRect(bar, radius, radius);
     BFont small(be_plain_font);
     small.SetSize(9);
     SetFont(&small);
-    SetHighColor(theme::kLcdText);
+    SetHighColor(theme::Colors().lcdText);
     DrawTruncated(this, activity.leftLabel.String(), BRect(fArtRect.right + 4, bar.top - 5, bar.left - 7, bar.bottom + 5), B_ALIGN_RIGHT, 0);
     DrawTruncated(this, activity.rightLabel.String(), BRect(bar.right + 7, bar.top - 5, r.right - 4, bar.bottom + 5), B_ALIGN_LEFT, 0);
 
@@ -315,12 +317,12 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
     BRect corner = CancelRect();
     if (activity.cancelCommand != 0 && !activity.done) {
         bool pressed = fTracking && fPressed == kCancelActivity;
-        SetHighColor(pressed ? Rgb(80, 88, 76) : Rgb(128, 136, 122));
+        SetHighColor(pressed ? colors.lcdButtonPressed : colors.lcdButton);
         FillEllipse(corner);
-        icons::Draw(this, icons::kClose, corner, 8.5f, Rgb(236, 240, 230));
+        icons::Draw(this, icons::kClose, corner, 8.5f, colors.lcdButtonGlyph);
     } else if (activity.done)
         icons::Draw(this, activity.failed ? icons::kWarning : icons::kCheck, corner, 11,
-            activity.failed ? Rgb(170, 90, 40) : theme::kLcdSecondary);
+            activity.failed ? colors.lcdWarning : colors.lcdSecondary);
 }
 
 void ToolbarView::AttachedToWindow()
@@ -431,10 +433,11 @@ void ToolbarView::SetViewButtonsShown(bool shown)
 void ToolbarView::DrawRoundButton(BRect rect, Hot which)
 {
     bool pressed = fPressed == which && fTracking;
-    rgb_color top = pressed ? Rgb(190, 190, 190) : Rgb(252, 252, 252);
-    rgb_color bottom = pressed ? Rgb(150, 150, 150) : Rgb(196, 196, 196);
+    const theme::Palette& colors = theme::Colors();
+    rgb_color top = pressed ? colors.buttonPressedTop : colors.buttonTop;
+    rgb_color bottom = pressed ? colors.buttonPressedBottom : colors.buttonBottom;
     // shadow
-    SetHighColor(0, 0, 0, 40);
+    SetHighColor(colors.buttonShadow);
     SetDrawingMode(B_OP_ALPHA);
     FillEllipse(rect.OffsetByCopy(0, 1.5));
     SetDrawingMode(B_OP_COPY);
@@ -442,7 +445,7 @@ void ToolbarView::DrawRoundButton(BRect rect, Hot which)
     gradient.AddColor(top, 0);
     gradient.AddColor(bottom, 255);
     FillEllipse(rect, gradient);
-    SetHighColor(118, 118, 118);
+    SetHighColor(colors.buttonBorder);
     SetPenSize(1);
     StrokeEllipse(rect);
     // glyph: Font Awesome, centred on its ink
@@ -454,38 +457,39 @@ void ToolbarView::DrawRoundButton(BRect rect, Hot which)
     // the play circle is larger than the two step buttons: keep the ink at the
     // same fraction of each circle so the three glyphs look equally weighted
     float size = rect.Height() * (which == kPlay ? 0.42f : 0.50f);
-    icons::Draw(this, glyph, rect, size, Rgb(60, 60, 60));
+    icons::Draw(this, glyph, rect, size, colors.buttonGlyph);
 }
 
 void ToolbarView::DrawVolume()
 {
     BRect r = fVolumeRect;
     float cy = (r.top + r.bottom) / 2;
+    const theme::Palette& colors = theme::Colors();
     // a speaker either side of the slider: the far one carries the "louder" idea
-    icons::Draw(this, icons::kVolume, BRect(r.left - 22, cy - 8, r.left - 8, cy + 8), 11, Rgb(90, 90, 90));
-    icons::Draw(this, icons::kVolume, BRect(r.right + 8, cy - 9, r.right + kSpeakerRoom, cy + 9), 13, Rgb(90, 90, 90));
+    icons::Draw(this, icons::kVolume, BRect(r.left - 22, cy - 8, r.left - 8, cy + 8), 11, colors.toolbarIcon);
+    icons::Draw(this, icons::kVolume, BRect(r.right + 8, cy - 9, r.right + kSpeakerRoom, cy + 9), 13, colors.toolbarIcon);
     // track
     BRect track(r.left, cy - 2, r.right, cy + 2);
-    SetHighColor(0, 0, 0, 50);
+    SetHighColor(colors.buttonShadow);
     SetDrawingMode(B_OP_ALPHA);
     FillRoundRect(track.OffsetByCopy(0, 1), 2, 2);
     SetDrawingMode(B_OP_COPY);
-    FillRoundGradient(this, track, 2, Rgb(150, 150, 150), Rgb(190, 190, 190));
+    FillRoundGradient(this, track, 2, colors.sliderTrackTop, colors.sliderTrackBottom);
     float knobX = r.left + fVolume * r.Width();
     BRect filled(r.left, cy - 2, knobX, cy + 2);
-    FillRoundGradient(this, filled, 2, Rgb(96, 96, 96), Rgb(130, 130, 130));
-    SetHighColor(110, 110, 110);
+    FillRoundGradient(this, filled, 2, colors.sliderFillTop, colors.sliderFillBottom);
+    SetHighColor(colors.sliderBorder);
     StrokeRoundRect(track, 2, 2);
     BRect knob(knobX - 6, cy - 6, knobX + 6, cy + 6);
-    SetHighColor(0, 0, 0, 60);
+    SetHighColor(colors.buttonShadow);
     SetDrawingMode(B_OP_ALPHA);
     FillEllipse(knob.OffsetByCopy(0, 1));
     SetDrawingMode(B_OP_COPY);
     BGradientLinear gradient(knob.LeftTop(), knob.LeftBottom());
-    gradient.AddColor(Rgb(250, 250, 250), 0);
-    gradient.AddColor(Rgb(190, 190, 190), 255);
+    gradient.AddColor(colors.knobTop, 0);
+    gradient.AddColor(colors.knobBottom, 255);
     FillEllipse(knob, gradient);
-    SetHighColor(100, 100, 100);
+    SetHighColor(colors.knobBorder);
     StrokeEllipse(knob);
 }
 
@@ -494,17 +498,17 @@ void ToolbarView::DrawProgress(BRect lcd)
     // a slim groove with the elapsed part filled and a small round playhead
     BRect bar = fProgressRect;
     float radius = BarRadius(bar);
-    SetHighColor(theme::kLcdBarBackground);
+    SetHighColor(theme::Colors().lcdBarBackground);
     FillRoundRect(bar, radius, radius);
-    SetHighColor(Blend(theme::kLcdBarBackground, Rgb(0, 0, 0), 0.22f));
+    SetHighColor(Blend(theme::Colors().lcdBarBackground, Rgb(0, 0, 0), 0.22f));
     StrokeLine(BPoint(bar.left + 2, bar.top), BPoint(bar.right - 2, bar.top)); // inner shadow
     float fraction = fDuration > 0 ? std::min(1.0f, std::max(0.0f, (float)fPosition / (float)fDuration)) : 0.0f;
     float knobX = floorf(bar.left + 5 + (bar.Width() - 10) * fraction);
     if (fDuration > 0 && knobX > bar.left + 2) {
         BRect done(bar.left, bar.top, knobX, bar.bottom);
-        FillRoundGradient(this, done, radius, Blend(theme::kLcdBar, Rgb(255, 255, 255), 0.12f), theme::kLcdBar);
+        FillRoundGradient(this, done, radius, Blend(theme::Colors().lcdBar, Rgb(255, 255, 255), 0.12f), theme::Colors().lcdBar);
     }
-    SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.1f));
+    SetHighColor(Blend(theme::Colors().lcdBorder, Rgb(0, 0, 0), 0.1f));
     StrokeRoundRect(bar, radius, radius);
     if (fDuration > 0) {
         float cy = bar.top + 2; // the groove is five pixels tall: this is its middle row
@@ -514,16 +518,16 @@ void ToolbarView::DrawProgress(BRect lcd)
         FillEllipse(knob.OffsetByCopy(0, 1));
         SetDrawingMode(B_OP_COPY);
         BGradientLinear gradient(knob.LeftTop(), knob.LeftBottom());
-        gradient.AddColor(Rgb(255, 255, 255), 0);
-        gradient.AddColor(Rgb(206, 212, 200), 255);
+        gradient.AddColor(theme::Colors().lcdKnobTop, 0);
+        gradient.AddColor(theme::Colors().lcdKnobBottom, 255);
         FillEllipse(knob, gradient);
-        SetHighColor(Blend(theme::kLcdText, theme::kLcdBorder, 0.45f));
+        SetHighColor(Blend(theme::Colors().lcdText, theme::Colors().lcdBorder, 0.45f));
         StrokeEllipse(knob);
     }
     BFont small(be_plain_font);
     small.SetSize(9);
     SetFont(&small);
-    SetHighColor(theme::kLcdText);
+    SetHighColor(theme::Colors().lcdText);
     BString elapsed(FormatDuration(fPosition).c_str());
     if (elapsed.IsEmpty())
         elapsed = "0:00";
@@ -540,10 +544,10 @@ void ToolbarView::DrawLcd()
     SetDrawingMode(B_OP_ALPHA);
     FillRoundRect(r.OffsetByCopy(0, 1), 6, 6);
     SetDrawingMode(B_OP_COPY);
-    FillRoundGradient(this, r, 6, theme::kLcdTop, theme::kLcdBottom);
-    SetHighColor(theme::kLcdBorder);
+    FillRoundGradient(this, r, 6, theme::Colors().lcdTop, theme::Colors().lcdBottom);
+    SetHighColor(theme::Colors().lcdBorder);
     StrokeRoundRect(r, 6, 6);
-    SetHighColor(255, 255, 255, 120);
+    SetHighColor(theme::Colors().lcdHighlight);
     SetDrawingMode(B_OP_ALPHA);
     StrokeLine(BPoint(r.left + 6, r.top + 1), BPoint(r.right - 6, r.top + 1));
     SetDrawingMode(B_OP_COPY);
@@ -562,11 +566,13 @@ void ToolbarView::DrawLcd()
     if (!HasSong()) {
         // idle: the Amp mark
         float cx = r.left + r.Width() / 2;
-        icons::Draw(this, icons::kMusic, BRect(cx - 40, r.top + 12, cx - 12, r.top + 40), 20, theme::kLcdSecondary);
+        icons::Draw(this, icons::kMusic, BRect(cx - 40, r.top + 12, cx - 12, r.top + 40), 20, theme::Colors().lcdSecondary);
         bold.SetSize(17);
         SetFont(&bold);
-        SetHighColor(theme::kLcdSecondary);
+        SetHighColor(theme::Colors().lcdSecondary);
+        SetDrawingMode(B_OP_OVER); // copy mode would smooth the letters against a white low colour
         DrawString("Amp", BPoint(cx - 6, r.top + 33));
+        SetDrawingMode(B_OP_COPY);
         return;
     }
     // artwork of the playing track
@@ -576,7 +582,7 @@ void ToolbarView::DrawLcd()
     FillRect(fArtRect.OffsetByCopy(1, 2));
     SetDrawingMode(B_OP_COPY);
     DrawBitmapFitted(this, art, fArtRect);
-    SetHighColor(Blend(theme::kLcdBorder, Rgb(0, 0, 0), 0.25f));
+    SetHighColor(Blend(theme::Colors().lcdBorder, Rgb(0, 0, 0), 0.25f));
     StrokeRect(fArtRect);
 
     // right-hand column: the quality label; the text stays centred between two equal
@@ -589,21 +595,21 @@ void ToolbarView::DrawLcd()
         SetFont(&tiny);
         float width = StringWidth(fQuality.String()) + 10;
         BRect pill(rightEdge - width, r.top + 6, rightEdge, r.top + 19);
-        SetHighColor(Blend(theme::kLcdBottom, Rgb(255, 255, 255), 0.35f));
+        SetHighColor(theme::Colors().lcdInset);
         FillRoundRect(pill, 4, 4);
-        SetHighColor(theme::kLcdSecondary);
+        SetHighColor(theme::Colors().lcdSecondary);
         StrokeRoundRect(pill, 4, 4);
-        SetHighColor(theme::kLcdText);
+        SetHighColor(theme::Colors().lcdText);
         DrawTruncated(this, fQuality.String(), pill, B_ALIGN_CENTER, 0);
         margin = std::max(margin, width + 12);
     }
 
     BRect textArea(r.left + margin, r.top + 4, r.right - margin, r.top + 20);
-    SetHighColor(theme::kLcdText);
+    SetHighColor(theme::Colors().lcdText);
     SetFont(&bold);
     DrawTruncated(this, fTitle.String(), textArea, B_ALIGN_CENTER, 0);
     SetFont(&plain);
-    SetHighColor(theme::kLcdSecondary);
+    SetHighColor(theme::Colors().lcdSecondary);
     BString line = fArtist;
     if (!fAlbum.IsEmpty()) {
         if (!line.IsEmpty())
@@ -620,36 +626,37 @@ void ToolbarView::DrawViewButtons()
     BFont small(be_plain_font);
     small.SetSize(9);
     SetFont(&small);
-    SetHighColor(theme::kToolbarText);
+    SetHighColor(theme::Colors().toolbarText);
     DrawTruncated(this, "Search", BRect(fSearchRect.left, fSearchRect.bottom + 2, fSearchRect.right, fSearchRect.bottom + 14), B_ALIGN_CENTER, 0);
     if (!fViewButtons)
         return;
     BRect r = fViewRect;
     float w = r.Width() / 3;
+    const theme::Palette& colors = theme::Colors();
     for (int i = 0; i < 3; i++) {
         BRect cell(r.left + i * w, r.top, r.left + (i + 1) * w, r.bottom);
         bool active = fViewMode == i;
         if (active)
-            FillVerticalGradient(this, cell, Rgb(120, 120, 120), Rgb(150, 150, 150));
+            FillVerticalGradient(this, cell, colors.buttonOnTop, colors.buttonOnBottom);
         else
-            FillVerticalGradient(this, cell, Rgb(250, 250, 250), Rgb(205, 205, 205));
-        SetHighColor(110, 110, 110);
+            FillVerticalGradient(this, cell, colors.buttonTop, colors.buttonBottom);
+        SetHighColor(colors.buttonBorder);
         StrokeRect(cell);
         icons::Icon glyph = i == 0 ? icons::kList : (i == 1 ? icons::kAlbumList : icons::kGrid);
-        icons::Draw(this, glyph, cell, cell.Height() * 0.55f, active ? Rgb(255, 255, 255) : Rgb(70, 70, 70));
+        icons::Draw(this, glyph, cell, cell.Height() * 0.55f, active ? colors.buttonOnGlyph : colors.buttonGlyph);
     }
     SetFont(&small);
-    SetHighColor(theme::kToolbarText);
+    SetHighColor(theme::Colors().toolbarText);
     DrawTruncated(this, "View", BRect(r.left, r.bottom + 2, r.right, r.bottom + 14), B_ALIGN_CENTER, 0);
 }
 
 void ToolbarView::Draw(BRect updateRect)
 {
     BRect bounds = Bounds();
-    FillVerticalGradient(this, bounds, theme::kToolbarTop, theme::kToolbarBottom);
-    SetHighColor(theme::kToolbarBorder);
+    FillVerticalGradient(this, bounds, theme::Colors().toolbarTop, theme::Colors().toolbarBottom);
+    SetHighColor(theme::Colors().toolbarBorder);
     StrokeLine(bounds.LeftBottom(), bounds.RightBottom());
-    SetHighColor(255, 255, 255, 140);
+    SetHighColor(theme::Colors().barHighlight);
     SetDrawingMode(B_OP_ALPHA);
     StrokeLine(bounds.LeftTop(), bounds.RightTop());
     SetDrawingMode(B_OP_COPY);

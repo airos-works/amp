@@ -2,6 +2,7 @@
 #include "App.h"
 #include "player/LabelPrinter.h"
 #include "player/Messages.h"
+#include "Theme.h"
 
 #include <Bitmap.h>
 #include <Button.h>
@@ -25,7 +26,6 @@ enum {
     kMsgCopies = 'lbcp', kMsgDensity = 'lbdn'
 };
 
-const rgb_color kErrorColor = {200, 40, 30, 255};
 
 } // namespace
 
@@ -260,8 +260,9 @@ void LabelWindow::Print()
 void LabelWindow::SetStatus(const BString& text, bool error)
 {
     fStatus->SetText(text.String());
+    fStatusError = error;
     if (error)
-        fStatus->SetHighColor(kErrorColor);
+        fStatus->SetHighColor(theme::Colors().error);
     else
         fStatus->SetHighUIColor(B_PANEL_TEXT_COLOR);
 }
@@ -275,6 +276,12 @@ void LabelWindow::UpdateControls()
 void LabelWindow::MessageReceived(BMessage* message)
 {
     switch (message->what) {
+        case B_COLORS_UPDATED:
+            // the error red has a lighter shade for dark panels
+            if (fStatusError)
+                fStatus->SetHighColor(theme::Colors().error);
+            BWindow::MessageReceived(message);
+            break;
         case kMsgTextChanged:
             Render();
             break;

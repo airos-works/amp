@@ -38,6 +38,30 @@ const uint32 kMsgPlayPause = 'plps';
 const uint32 kMsgSeek = 'seek';
 const uint32 kMsgScrub = 'scrb';
 const uint32 kMsgPulse = 'puls';
+
+// The panel's own colours, light or dark with Tracker's (the system's) panels. The play
+// button comes from Amp's palette, like the toolbar's.
+struct PanelColors {
+    rgb_color background, title, artist, album;
+    rgb_color sleeve, sleeveBorder, sleeveNote;
+    rgb_color groove, grooveFillTop, grooveFillBottom, grooveBorder;
+    rgb_color knobTop, knobBottom, knobBorder, times;
+};
+
+const PanelColors& Panel()
+{
+    static const PanelColors light = {
+        {240, 240, 240, 255}, {30, 30, 30, 255}, {70, 70, 70, 255}, {110, 110, 110, 255},
+        {214, 214, 214, 255}, {170, 170, 170, 255}, {130, 130, 130, 255},
+        {204, 204, 204, 255}, {150, 150, 150, 255}, {112, 112, 112, 255}, {150, 150, 150, 255},
+        {255, 255, 255, 255}, {214, 214, 214, 255}, {120, 120, 120, 255}, {70, 70, 70, 255}};
+    static const PanelColors dark = {
+        {40, 40, 43, 255}, {236, 236, 238, 255}, {196, 196, 200, 255}, {150, 150, 156, 255},
+        {64, 64, 68, 255}, {28, 28, 30, 255}, {120, 120, 126, 255},
+        {62, 62, 66, 255}, {176, 176, 180, 255}, {140, 140, 144, 255}, {24, 24, 26, 255},
+        {236, 236, 238, 255}, {170, 170, 174, 255}, {24, 24, 26, 255}, {196, 196, 200, 255}};
+    return amp::theme::IsDark() ? dark : light;
+}
 const uint32 kMsgOpenInAmp = 'oamp';
 const bigtime_t kPulseInterval = 250000;
 const float kArtSize = 240;
@@ -111,7 +135,7 @@ public:
             SetDrawingMode(B_OP_ALPHA);
             DrawBitmap(fBitmap, source, dest, B_FILTER_BITMAP_BILINEAR);
             SetDrawingMode(B_OP_COPY);
-            SetHighColor(0, 0, 0, 60);
+            SetHighColor(amp::theme::Colors().artHairline);
             SetDrawingMode(B_OP_ALPHA);
             StrokeRect(dest);
             SetDrawingMode(B_OP_COPY);
@@ -119,14 +143,14 @@ public:
             // A grey record sleeve with a note, for songs without a picture.
             BRect sleeve = bounds;
             sleeve.InsetBy(floorf(bounds.Width() * 0.1f), floorf(bounds.Height() * 0.1f));
-            SetHighColor(214, 214, 214);
+            SetHighColor(Panel().sleeve);
             FillRoundRect(sleeve, 6, 6);
-            SetHighColor(170, 170, 170);
+            SetHighColor(Panel().sleeveBorder);
             StrokeRoundRect(sleeve, 6, 6);
             BFont font(be_plain_font);
             font.SetSize(sleeve.Height() * 0.45f);
             SetFont(&font);
-            SetHighColor(130, 130, 130);
+            SetHighColor(Panel().sleeveNote);
             const char* note = "\xE2\x99\xAA";
             float width = StringWidth(note);
             font_height fh;
@@ -281,20 +305,21 @@ private:
     {
         BRect rect = fButton;
         bool pressed = fTracking == kButton && fInside;
-        rgb_color top = pressed ? amp::Rgb(190, 190, 190) : amp::Rgb(252, 252, 252);
-        rgb_color bottom = pressed ? amp::Rgb(150, 150, 150) : amp::Rgb(196, 196, 196);
+        const amp::theme::Palette& colors = amp::theme::Colors();
+        rgb_color top = pressed ? colors.buttonPressedTop : colors.buttonTop;
+        rgb_color bottom = pressed ? colors.buttonPressedBottom : colors.buttonBottom;
         SetDrawingMode(B_OP_ALPHA);
-        SetHighColor(0, 0, 0, 40);
+        SetHighColor(colors.buttonShadow);
         FillEllipse(rect.OffsetByCopy(0, 1.5f * fScale));
         SetDrawingMode(B_OP_COPY);
         BGradientLinear gradient(BPoint(rect.left, rect.top), BPoint(rect.left, rect.bottom));
         gradient.AddColor(top, 0);
         gradient.AddColor(bottom, 255);
         FillEllipse(rect, gradient);
-        SetHighColor(118, 118, 118);
+        SetHighColor(colors.buttonBorder);
         SetPenSize(1);
         StrokeEllipse(rect);
-        rgb_color ink = amp::Rgb(60, 60, 60);
+        rgb_color ink = colors.buttonGlyph;
         if (amp::icons::Available()) {
             amp::icons::Draw(this, fPlaying ? amp::icons::kPause : amp::icons::kPlay, rect, rect.Height() * 0.42f, ink);
             return;
@@ -317,7 +342,8 @@ private:
         // A slim groove with the played part filled and a small round playhead.
         BRect bar = fGroove;
         float radius = bar.Height() / 2;
-        rgb_color track = amp::Rgb(204, 204, 204);
+        const PanelColors& panel = Panel();
+        rgb_color track = panel.groove;
         SetHighColor(track);
         FillRoundRect(bar, radius, radius);
         SetHighColor(amp::Blend(track, amp::Rgb(0, 0, 0), 0.22f));
@@ -325,9 +351,9 @@ private:
         float knobX = KnobX();
         if (fDuration > 0 && knobX > bar.left + 2) {
             BRect done(bar.left, bar.top, knobX, bar.bottom);
-            amp::FillRoundGradient(this, done, radius, amp::Rgb(150, 150, 150), amp::Rgb(112, 112, 112));
+            amp::FillRoundGradient(this, done, radius, panel.grooveFillTop, panel.grooveFillBottom);
         }
-        SetHighColor(amp::Rgb(150, 150, 150));
+        SetHighColor(panel.grooveBorder);
         StrokeRoundRect(bar, radius, radius);
         if (fDuration <= 0)
             return;
@@ -339,10 +365,10 @@ private:
         FillEllipse(knob.OffsetByCopy(0, 1));
         SetDrawingMode(B_OP_COPY);
         BGradientLinear gradient(knob.LeftTop(), knob.LeftBottom());
-        gradient.AddColor(amp::Rgb(255, 255, 255), 0);
-        gradient.AddColor(amp::Rgb(214, 214, 214), 255);
+        gradient.AddColor(panel.knobTop, 0);
+        gradient.AddColor(panel.knobBottom, 255);
         FillEllipse(knob, gradient);
-        SetHighColor(amp::Rgb(120, 120, 120));
+        SetHighColor(panel.knobBorder);
         StrokeEllipse(knob);
     }
 
@@ -350,7 +376,7 @@ private:
     {
         BFont small = TimeFont();
         SetFont(&small);
-        SetHighColor(amp::Rgb(70, 70, 70));
+        SetHighColor(Panel().times);
         std::string elapsed = FormatTime(fPosition);
         std::string remaining = "-" + FormatTime(std::max<int64_t>(0, fDuration - fPosition));
         amp::DrawTruncated(this, elapsed.c_str(), fElapsed, B_ALIGN_RIGHT, 0);
@@ -373,7 +399,7 @@ public:
     explicit SongPreview(const entry_ref& ref)
         : BQuickLookPreview("Amp preview"), fRef(ref), fDecoder(fOutput), fScale(UiScale())
     {
-        SetViewColor(240, 240, 240);
+        SetViewColor(Panel().background);
         SetLowColor(ViewColor());
     }
 
@@ -450,19 +476,16 @@ public:
         bold.SetSize(be_plain_font->Size() * 1.4f);
         fTitle->SetFont(&bold);
         fTitle->SetTruncation(B_TRUNCATE_END);
-        fTitle->SetHighColor(30, 30, 30);
         AddChild(fTitle);
         fArtist = new BStringView("artist", fArtistText.c_str());
         BFont medium(be_plain_font);
         medium.SetSize(be_plain_font->Size() * 1.1f);
         fArtist->SetFont(&medium);
         fArtist->SetTruncation(B_TRUNCATE_END);
-        fArtist->SetHighColor(70, 70, 70);
         AddChild(fArtist);
         fAlbum = new BStringView("album", fAlbumText.c_str());
         fAlbum->SetFont(&medium);
         fAlbum->SetTruncation(B_TRUNCATE_END);
-        fAlbum->SetHighColor(110, 110, 110);
         AddChild(fAlbum);
 
         // The glyphs come from the icon font Amp ships; once per process.
@@ -471,10 +494,7 @@ public:
         fTransport = new TransportView(BMessenger(this), fScale);
         AddChild(fTransport);
 
-        for (BView* view : {(BView*)fTitle, (BView*)fArtist, (BView*)fAlbum}) {
-            view->SetViewColor(ViewColor());
-            view->SetLowColor(ViewColor());
-        }
+        ApplyColors();
         Layout();
         BMessage pulse(kMsgPulse);
         fPulse = new BMessageRunner(BMessenger(this), &pulse, kPulseInterval);
@@ -536,12 +556,39 @@ public:
         case kMsgOpenInAmp:
             OpenInAmp();
             break;
+        case B_COLORS_UPDATED:
+            // the system switched between light and dark
+            ApplyColors();
+            BQuickLookPreview::MessageReceived(message);
+            break;
         default:
             BQuickLookPreview::MessageReceived(message);
         }
     }
 
 private:
+    void ApplyColors()
+    {
+        const PanelColors& panel = Panel();
+        SetViewColor(panel.background);
+        SetLowColor(panel.background);
+        Invalidate();
+        if (fTitle == nullptr)
+            return;
+        fTitle->SetHighColor(panel.title);
+        fArtist->SetHighColor(panel.artist);
+        fAlbum->SetHighColor(panel.album);
+        for (BView* view : {(BView*)fTitle, (BView*)fArtist, (BView*)fAlbum, (BView*)fArtView, (BView*)fTransport}) {
+            if (view == nullptr)
+                continue;
+            if (view != fArtView && view != fTransport) {
+                view->SetViewColor(panel.background);
+                view->SetLowColor(panel.background);
+            }
+            view->Invalidate();
+        }
+    }
+
     void ReadTags(const char* path)
     {
         BPath p(path);

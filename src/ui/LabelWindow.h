@@ -55,6 +55,7 @@ private:
     int fSelected = -1;
     bool fSearching = false;
     bool fPrinting = false;
+    bool fStatusError = false;
     niimbot::Raster fRaster;
 };
 
