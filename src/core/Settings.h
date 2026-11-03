@@ -26,6 +26,10 @@ struct SettingsData {
     int repeat = 0;               // 0 off, 1 all, 2 one
     int windowX = 60, windowY = 60, windowW = 1180, windowH = 720;
     int sidebarWidth = 200;
+    // Labels: the Bluetooth label printer last printed to, and its print darkness (1..5).
+    std::string labelPrinterAddress;
+    std::string labelPrinterName;
+    int labelDensity = 3;
     int scannerVersion = 0;       // bumped when the scanner learns new fields: forces one full rescan
 };
 

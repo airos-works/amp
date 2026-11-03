@@ -1,5 +1,6 @@
 #include "Settings.h"
 #include "Json.h"
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -69,6 +70,10 @@ bool Settings::Load()
     d.windowH = ui.value("windowH", 720);
     d.sidebarWidth = ui.value("sidebarWidth", 200);
     d.scannerVersion = j.value("scannerVersion", 0);
+    Json labels = j.value("labels", Json::object());
+    d.labelPrinterAddress = labels.value("printerAddress", "");
+    d.labelPrinterName = labels.value("printerName", "");
+    d.labelDensity = std::min(5, std::max(1, labels.value("density", 3)));
     fData = d;
     return true;
 }
@@ -87,6 +92,8 @@ bool Settings::Save()
     for (const ArtSource& s : d.artSources)
         sources.push_back({{"id", s.id}, {"enabled", s.enabled}, {"apiKey", s.apiKey}});
     j["artwork"] = {{"fetchOnline", d.fetchOnlineArt}, {"sources", sources}};
+    j["labels"] = {{"printerAddress", d.labelPrinterAddress}, {"printerName", d.labelPrinterName},
+        {"density", d.labelDensity}};
     j["ui"] = {{"volume", d.volume}, {"viewMode", d.viewMode}, {"playlistViewMode", d.playlistViewMode}, {"selectedSource", d.selectedSource},
         {"shuffle", d.shuffle}, {"repeat", d.repeat}, {"windowX", d.windowX}, {"windowY", d.windowY},
         {"windowW", d.windowW}, {"windowH", d.windowH}, {"sidebarWidth", d.sidebarWidth}};

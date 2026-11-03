@@ -16,6 +16,7 @@ src/core     portable C++17 (no Haiku headers except in Scanner's TagLib use)
   NetMD              MiniDisc recorder protocol: commands, secure download, title/capacity planning
   NetMDSimulator     a recorder in software (tests, AMP_NETMD_SIMULATE)
   Des                DES / two-key 3DES for NetMD
+  Niimbot            Niimbot label printer protocol: packets, raster rows, picture preparation
   Resampler          windowed-sinc sample rate conversion
   FlacDecoder, AlacDecoder   lossless packet decoders (Haiku's own drop the last frames)
 src/player   Haiku Media Kit
@@ -25,6 +26,8 @@ src/player   Haiku Media Kit
   NetMDUsb           USB Kit transport and roster for NetMD recorders
   MiniDiscPcm        any local file -> 44.1 kHz 16-bit big-endian PCM for SP recording
   MiniDisc           MiniDiscManager: recorder state, write and erase jobs on one worker thread
+  Rfcomm             user-land RFCOMM (Bluetooth serial port) on a classic L2CAP channel
+  LabelPrinter       Niimbot B1 over Rfcomm: search, identify and print jobs on threads
 src/quicklook  air/OS Quick Look add-on (add-ons/quick_look/Amp): LocalDecoder + AudioOutput +
                TagLib artwork and tags in Tracker's space-bar panel; built from these sources
                as position independent code when the SDK has add-ons/quick_look/QuickLook.h
@@ -43,9 +46,12 @@ src/ui       Haiku Interface Kit
   ArtStore           scaled BBitmap cache fed by ImageCache
   MiniDiscView       the DEVICES source: disc summary, capacity bar, tracks and pending songs
   MainWindowMiniDisc the write flow (questions, job) and its progress in the LCD and sidebar
+  LabelRenderer      a disc label as printer dots: dithered artwork, title, artist, time
+  LabelWindow        Print Label…: dot-exact preview, printer search and choice, printing
+  MainWindowLabel    what goes on the label of an album, a playlist or the MiniDisc
 ```
 
-MiniDisc support is described in `MINIDISC.md`.
+MiniDisc support is described in `MINIDISC.md`, label printing in `LABELS.md`.
 
 The column header is deliberately *not* part of the scrolled table: `TrackHeaderView` is a
 sibling of the `BScrollView`, so scrolling blits only the rows while the header is painted once

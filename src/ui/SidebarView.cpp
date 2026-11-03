@@ -278,6 +278,11 @@ void SidebarView::ShowContextMenu(int index, BPoint where)
         BMenuItem* refresh = new BMenuItem("Refresh", new BMessage(kMsgMDRefresh));
         refresh->SetEnabled(!fMiniDiscBusy);
         menu->AddItem(refresh);
+        BMessage* label = new BMessage(kMsgPrintLabel);
+        label->AddString("kind", "minidisc");
+        BMenuItem* labelItem = new BMenuItem("Print Label…", label);
+        labelItem->SetEnabled(!fMiniDiscBusy);
+        menu->AddItem(labelItem);
         menu->SetTargetForItems(Window());
         menu->SetAsyncAutoDestruct(true);
         menu->Go(ConvertToScreen(where), true, true, true);
@@ -299,6 +304,10 @@ void SidebarView::ShowContextMenu(int index, BPoint where)
             writeItem->SetEnabled(!fMiniDiscBusy);
             menu->AddItem(writeItem);
         }
+        BMessage* label = new BMessage(kMsgPrintLabel);
+        label->AddString("kind", "playlist");
+        label->AddInt64("playlist", item.playlistId);
+        menu->AddItem(new BMenuItem("Print Label…", label));
         BMessage* rename = new BMessage(kMsgRenamePlaylist);
         rename->AddInt64("playlist", item.playlistId);
         menu->AddItem(new BMenuItem("Rename…", rename));

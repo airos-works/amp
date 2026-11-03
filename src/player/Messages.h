@@ -57,6 +57,13 @@ enum {
     kMsgMDErase = 'mder',
     kMsgMDRefresh = 'mdrf',
     kMsgMDClearStatus = 'mdcl',       // the display goes back to the playing song
+
+    // Labels (LabelWindow, player/LabelPrinter)
+    kMsgPrintLabel = 'lbpr',          // "kind" string (album, playlist, minidisc), "album"/"playlist" int64
+    kMsgLabelPrinterFound = 'lbfd',   // "address", "name", "model" string, "model_id", "battery" int32
+    kMsgLabelSearchDone = 'lbsd',     // "count" int32, or "error" string; "identify" bool: one printer failed
+    kMsgLabelProgress = 'lbpg',       // "fraction" float, "text" string
+    kMsgLabelPrinted = 'lbok',        // "ok" bool, "error" string
 };
 
 enum PlayerState { kStopped = 0, kPlaying = 1, kPaused = 2 };

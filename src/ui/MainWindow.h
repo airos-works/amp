@@ -56,6 +56,8 @@ private:
     void MiniDiscFinished(BMessage* message);
     void ConfirmMiniDiscErase();
     void ClearMiniDiscStatus(bigtime_t after);
+    // Print Label…: an album's, a playlist's or the MiniDisc's label (MainWindowLabel.cpp)
+    void OpenLabelWindow(BMessage* request);
     // the library scan as a page of the display
     void LibraryScanProgress(const BString& text, bool done, int processed, int total);
     // takes a finished activity off the display after a while

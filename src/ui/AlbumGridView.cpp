@@ -294,6 +294,12 @@ void AlbumGridView::ShowContextMenu(int index, BPoint where)
         item->SetEnabled(!miniDisc.busy);
         menu->AddItem(item);
     }
+    BMessage* label = withTracks(kMsgPrintLabel);
+    label->AddString("kind", "album");
+    label->AddString("name", fAlbums[index].name.c_str());
+    if (!fAlbums[index].artist.empty())
+        label->AddString("artist", fAlbums[index].artist.c_str());
+    menu->AddItem(new BMenuItem("Print Label…", label));
     menu->AddSeparatorItem();
     BMenu* playlists = new BMenu("Add to Playlist");
     playlists->AddItem(new BMenuItem("New Playlist…", withTracks(kMsgNewPlaylist)));

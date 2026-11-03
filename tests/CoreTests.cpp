@@ -6,10 +6,12 @@
 #include "core/Library.h"
 #include "core/NetMD.h"
 #include "core/NetMDSimulator.h"
+#include "core/Niimbot.h"
 #include "core/Resampler.h"
 #include "core/Scanner.h"
 #include "core/Settings.h"
 #include "core/TagStream.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -668,6 +670,90 @@ void TestArtistLinks()
     rmdir(folder);
 }
 
+void TestNiimbot()
+{
+    using namespace niimbot;
+    auto hex = [](const Bytes& bytes) {
+        std::string out;
+        char cell[4];
+        for (uint8_t b : bytes) {
+            snprintf(cell, sizeof(cell), "%02x", b);
+            out += cell;
+        }
+        return out;
+    };
+    // packets as a B1 (firmware 15.55) took them
+    CHECK(hex(Encode(kConnect, Bytes{1})) == "035555c10101c1aaaa");
+    CHECK(hex(Encode(kPrinterInfo, Bytes{kInfoModelId})) == "5555400108" "49aaaa");
+    CHECK(hex(Encode(PrintStart(1))) == "55550107000100000000000" "7aaaa");
+    CHECK(hex(Encode(PageSize(240, 384, 1))) == "5555130600f001800001" "65aaaa");
+
+    // answers cut out of a stream with noise, a broken packet and a split
+    Parser parser;
+    Bytes stream = {0x00, 0x55, 0x55, 0xc2, 0x01, 0x03, 0xc0, 0xaa, 0xaa,
+        0x55, 0x55, 0x48, 0x02, 0x10, 0x00, 0x00, 0xaa, 0xaa, // bad check byte
+        0x55, 0x55, 0x48, 0x02, 0x10, 0x00, 0x5a, 0xaa};
+    parser.Feed(stream.data(), stream.size());
+    Packet packet;
+    CHECK(parser.Next(packet) && packet.command == kAnswerConnect && packet.data == Bytes{3});
+    CHECK(!parser.Next(packet));
+    uint8_t tail = 0xaa;
+    parser.Feed(&tail, 1);
+    CHECK(parser.Next(packet) && packet.command == 0x48 && packet.data == (Bytes{0x10, 0x00}));
+    CHECK(ModelById(packet.data[0] << 8 | packet.data[1]) != nullptr);
+    CHECK(ModelById(1) == nullptr);
+
+    // the roll's tag, as the printer sent it
+    Packet rfid{kAnswerRfidInfo, Bytes{0x88, 0x1d, 0xc7, 0xe7, 0xf2, 0x1e, 0x10, 0x80, 0x08, '1', '0', '2', '6',
+        '2', '2', '6', '0', 0x10, 'P', 'Z', '1', 'I', '8', '1', '7', '4', '0', '5', '0', '0', '3', '7', '3', '4',
+        0x01, 0x14, 0x00, 0x02, 0x01, 0x00, 0xe6}};
+    RfidInfo info;
+    CHECK(ParseRfidInfo(rfid, info) && info.present && info.barcode == "10262260" && info.total == 276
+        && info.used == 2 && info.type == 1);
+    CHECK(ParseRfidInfo(Packet{kAnswerRfidInfo, Bytes{0}}, info) && !info.present);
+
+    // rows: blank runs, repeats, sparse rows as positions, full rows as bits
+    Raster raster(384, 10);
+    for (int y = 2; y < 5; y++)
+        for (int x = 0; x < 384; x += 2)
+            raster.Set(x, y);
+    raster.Set(5, 7);
+    raster.Set(200, 7);
+    std::vector<Packet> rows = RowPackets(raster, 384);
+    CHECK(rows.size() == 5);
+    CHECK(rows[0].command == kEmptyRows && rows[0].data == (Bytes{0, 0, 2}));
+    CHECK(rows[1].command == kBitmapRow && rows[1].data.size() == 6 + 48);
+    CHECK(rows[1].data[2] == 64 && rows[1].data[3] == 64 && rows[1].data[4] == 64 && rows[1].data[5] == 3);
+    CHECK(rows[2].command == kEmptyRows && rows[2].data == (Bytes{0, 5, 2}));
+    CHECK(rows[3].command == kBitmapRowIndexed && rows[3].data == (Bytes{0, 7, 1, 1, 0, 1, 0, 5, 0, 200}));
+    CHECK(rows[4].command == kEmptyRows && rows[4].data == (Bytes{0, 8, 2}));
+
+    // dithering keeps the tone: white stays white, black black, mid grey about half
+    std::vector<uint8_t> grey(64 * 64), dots;
+    for (int y = 0; y < 64; y++)
+        for (int x = 0; x < 64; x++)
+            grey[y * 64 + x] = x < 16 ? 255 : x < 32 ? 0 : 128;
+    Dither(grey, 64, 64, dots);
+    int white = 0, black = 0, mid = 0;
+    for (int y = 0; y < 64; y++)
+        for (int x = 0; x < 64; x++)
+            (x < 16 ? white : x < 32 ? black : mid) += dots[y * 64 + x];
+    CHECK(white == 0);
+    CHECK(black == 16 * 64);
+    CHECK(mid > 32 * 64 * 2 / 5 && mid < 32 * 64 * 3 / 5);
+
+    // a pale, flat picture is stretched to full black and white; a blank one stays blank
+    std::vector<uint8_t> pale(32 * 32);
+    for (int i = 0; i < 32 * 32; i++)
+        pale[i] = (uint8_t)(120 + (i % 32) * 4);
+    PrepareGrey(pale, 32, 32);
+    CHECK(*std::min_element(pale.begin(), pale.end()) == 0);
+    CHECK(*std::max_element(pale.begin(), pale.end()) == 255);
+    std::vector<uint8_t> blank(16 * 16, 255);
+    PrepareGrey(blank, 16, 16);
+    CHECK(blank[0] == 255 && blank[255] == 255);
+}
+
 int main()
 {
     TestDes();
@@ -681,6 +767,7 @@ int main()
     TestMp4();
     TestScanner();
     TestArtistLinks();
+    TestNiimbot();
     if (gFailures) {
         fprintf(stderr, "%d check(s) failed\n", gFailures);
         return 1;

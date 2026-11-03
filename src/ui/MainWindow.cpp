@@ -997,6 +997,9 @@ void MainWindow::MessageReceived(BMessage* message)
         case kMsgWriteToMiniDisc:
             StartMiniDiscWrite(message);
             break;
+        case kMsgPrintLabel:
+            OpenLabelWindow(message);
+            break;
         case kMsgMDCancel: {
             MiniDiscManager& manager = App()->MiniDisc();
             if (!manager.Busy())
