@@ -244,7 +244,9 @@ Bytes Simulator::Handle(const Bytes& c)
                 reply.U8(0x00).Append(Slice(c, 11, 13));
                 break;
             case 0x28: {
-                if (writeProtected || !discPresent) {
+                bool refuse = refuseUpload >= 0 && fUploadRequests >= refuseUpload;
+                fUploadRequests++;
+                if (writeProtected || !discPresent || refuse) {
                     Reply(0x0a, c);
                     return Bytes();
                 }

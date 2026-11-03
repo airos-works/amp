@@ -106,6 +106,11 @@ encodes the PCM to ATRAC itself. Faster writing would need LP2/LP4, which the co
   recorder alone until it is unplugged (which ends the stuck transfer) or the transfer returns
   after all. Charge the recorder or put in a fresh battery, reconnect it and let Amp write the
   rest. The songs before the stalled one are on the disc: each is finished on its own.
+- **"The MiniDisc recorder refused to start recording …"**: the recorder rejected the command
+  that starts a song, though there is a disc, it takes recordings and the song fits. A portable
+  does this when its battery is too low to record but still high enough to answer: on the
+  laptop it refused song 18 of a write after a stall and a slowdown earlier in the evening.
+  Charge it and write the remaining songs (Amp offers them).
 - **"The MiniDisc is write-protected"**: slide the record tab on the disc's edge so the hole is
   closed. The disc view warns about it and the sidebar entry shows a lock.
 - **The recorder stops answering after a program was killed while talking to it.** It has to
@@ -123,6 +128,7 @@ encodes the PCM to ATRAC itself. Faster writing would need LP2/LP4, which the co
   with a flat battery that is unplugged; `AMP_NETMD_STALL_TIMEOUT=<seconds>` shortens the
   watchdog's 30 seconds. `AMP_NETMD_SIMULATE_STALL=1:20 AMP_NETMD_STALL_TIMEOUT=5` shows the
   whole failure and retry in half a minute.
+  `AMP_NETMD_SIMULATE_REFUSE=<upload>` makes the recorder refuse every upload from that one on.
 - `python3 tools/make-md-test-library.py DIR` generates albums that cover the conversion
   paths (320k MP3, 24-bit 48 kHz FLAC, mono AAC, Vorbis) and a 96-minute album that does
   not fit on an 80-minute disc.

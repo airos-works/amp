@@ -409,6 +409,10 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
         shared.writtenMs = writtenMs;
     };
 
+    // the song being sent: a refusal then is about recording it
+    int sending = -1;
+    std::string sendingTitle;
+
     PostProgress(shared, job, kMDPreparing, 0, "", 0, 0, -1);
     std::unique_ptr<ConversionQueue> conversions(new ConversionQueue(job.items, shared.cancel));
     try {
@@ -480,6 +484,8 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
             auto started = Clock::now();
             uint64_t trackSent = 0;
             PostProgress(shared, job, kMDWriting, (int)i + 1, titles[i], overall(0), 0, eta());
+            sending = (int)i;
+            sendingTitle = item.title;
             netmd::DownloadTrack(device, source, (uint64_t)converted.bytes, titles[i],
                 [&](const netmd::DownloadProgress& progress) {
                     trackSent = progress.sent;
@@ -502,6 +508,7 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
             sendSeconds += std::chrono::duration<double>(Clock::now() - started).count();
             sentBytes += std::min<uint64_t>(trackSent, (uint64_t)converted.bytes);
             doneBytes += (uint64_t)converted.bytes;
+            sending = -1;
             conversions->Consumed(i);
             written++;
             writtenMs += durationMs;
@@ -525,6 +532,14 @@ void RunJob(Shared& shared, netmd::Device& device, MiniDiscJob& job)
                     error = "The MiniDisc is write-protected. Slide its record tab closed and try again.";
                 else if (now.leftFrames < netmd::kFramesPerSecond * 2)
                     error = "The MiniDisc is full.";
+                else if (sending >= 0 && std::string(e.what()).find("f003010328") != std::string::npos) {
+                    // there is a disc, it takes recordings and the song fits by the recorder's
+                    // own count: a portable refuses to record when its battery is too low for it
+                    error = "The MiniDisc recorder refused to start recording “" + sendingTitle + "” (song "
+                        + std::to_string(sending + 1) + " of " + std::to_string(job.items.size())
+                        + "). A portable recorder does this when its battery is too low to record.\n\n"
+                        "Charge it or put in a fresh battery, then try again.";
+                }
             } catch (const netmd::Error&) {
             }
         }
@@ -599,6 +614,9 @@ public:
                 simulator->tracks = {{"Old Song One", 512 * 212, netmd::kEncodingLP2},
                     {"Old Song Two", 512 * 187, netmd::kEncodingLP2}, {"Old Song Three", 512 * 243, netmd::kEncodingSP}};
                 // AMP_NETMD_SIMULATE_STALL=<upload>[:<seconds>]: that upload (from 0) stops partway
+                // AMP_NETMD_SIMULATE_REFUSE=<upload>: from that upload (from 0) on, recording is refused
+                if (const char* refuse = getenv("AMP_NETMD_SIMULATE_REFUSE"))
+                    simulator->refuseUpload = atoi(refuse);
                 if (const char* stall = getenv("AMP_NETMD_SIMULATE_STALL")) {
                     simulator->stallUpload = atoi(stall);
                     const char* colon = strchr(stall, ':');

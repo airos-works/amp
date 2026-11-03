@@ -36,6 +36,9 @@ public:
     // transfer cancelled by unplugging fails. -1: never.
     int stallUpload = -1;
     int stallMs = 0;
+    // A recorder whose battery is too low to record: from upload number `refuseUpload` on, the
+    // command that starts an upload is rejected. -1: never.
+    int refuseUpload = -1;
 
 private:
     Bytes Handle(const Bytes& command);
@@ -52,6 +55,7 @@ private:
     std::string fPendingTitle;
     double fSpeed;
     int fUploads = 0;
+    int fUploadRequests = 0;
     bool fStalled = false;
 };
 
