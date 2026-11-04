@@ -484,8 +484,20 @@ void MainWindow::UpdateSummary(const std::vector<int64_t>& tracks)
     fStatus->SetSummary(text);
 }
 
+void MainWindow::ClearSearch()
+{
+    // a search belongs to the list it was typed in: carried into a playlist it would hide
+    // songs there with no sign of why (songs dropped in "vanish", the count looks wrong)
+    if (fSearch.empty())
+        return;
+    fSearch.clear(); // first, so the field's modification message finds nothing changed
+    fToolbar->SearchField()->SetText("");
+}
+
 void MainWindow::SelectSource(const std::string& source, int64_t playlistId, bool play)
 {
+    if (source != fSource || playlistId != fPlaylistId)
+        ClearSearch();
     fSource = source;
     fPlaylistId = playlistId;
     ClearDrillDown();
@@ -580,6 +592,7 @@ int64_t MainWindow::ResolveShownAlbum(Library& library)
 
 void MainWindow::ShowArtist(int64_t artistId)
 {
+    ClearSearch(); // the artist may not match the search, and the filtered list would lack it
     fSource = "artists";
     ClearDrillDown();
     fSidebar->Select("artists", 0);

@@ -44,6 +44,7 @@ private:
     std::vector<AlbumCell> CellsFromLibrary() const;
     std::vector<AlbumCell> CellsFromTracks(const std::vector<int64_t>& tracks) const;
     void ClearDrillDown();
+    void ClearSearch();
     void UpdateNowPlaying();
     void SetViewMode(int mode);
     std::vector<int64_t> FilterTracks(const std::vector<int64_t>& ids) const;
