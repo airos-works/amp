@@ -209,13 +209,18 @@ private:
         FillRoundRect(bar.OffsetByCopy(0, 1), 5, 5);
         SetDrawingMode(B_OP_COPY);
         FillRoundGradient(this, bar, 5, colors.capacityTop, colors.capacityBottom);
-        BRegion clip(bar);
-        ConstrainClippingRegion(&clip);
+        // each segment is the whole rounded bar clipped to its span, so the bar's rounded
+        // ends stay round wherever a segment reaches them
+        auto segment = [&](float left, float right, rgb_color top, rgb_color bottom) {
+            BRegion clip(BRect(left, bar.top - 1, right, bar.bottom + 1));
+            ConstrainClippingRegion(&clip);
+            FillRoundGradient(this, bar, 5, top, bottom);
+            ConstrainClippingRegion(nullptr);
+        };
         if (usedEnd > bar.left)
-            FillVerticalGradient(this, BRect(bar.left, bar.top, usedEnd, bar.bottom), Rgb(120, 160, 225), Rgb(52, 102, 190));
+            segment(bar.left, usedEnd, Rgb(120, 160, 225), Rgb(52, 102, 190));
         if (addEnd > usedEnd + 0.5f)
-            FillVerticalGradient(this, BRect(usedEnd, bar.top, addEnd, bar.bottom), Rgb(250, 196, 110), Rgb(222, 140, 40));
-        ConstrainClippingRegion(nullptr);
+            segment(usedEnd, addEnd, Rgb(250, 196, 110), Rgb(222, 140, 40));
         SetHighColor(colors.capacityBorder);
         StrokeRoundRect(bar, 5, 5);
 
