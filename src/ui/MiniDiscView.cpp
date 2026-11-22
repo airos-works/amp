@@ -264,6 +264,7 @@ public:
     MiniDiscListView()
         : BView("minidisc-tracks", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE | B_SCROLL_VIEW_AWARE)
     {
+        SetExplicitMinSize(BSize(0, 0));
         SetViewColor(B_TRANSPARENT_COLOR);
     }
 

@@ -37,6 +37,7 @@ class NowPlayingCover : public BView {
 public:
     NowPlayingCover() : BView("album-cover", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
     {
+        SetExplicitMinSize(BSize(0, 0));
         SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
     }
 
@@ -189,6 +190,12 @@ void MainWindow::SetMobile(bool mobile)
         fToolbar->Show();
         fStatus->Show();
     }
+    // The desktop card layout takes the largest minimum of all its pages,
+    // including the offscreen MiniDisc tools. The touch library can shrink
+    // to the space between navigation, transport and the system keyboard.
+    BSize minimum = mobile ? BSize(0, 0) : BSize(B_SIZE_UNSET, B_SIZE_UNSET);
+    fContent->SetExplicitMinSize(minimum);
+    fSplit->SetExplicitMinSize(minimum);
     fSplit->SetItemCollapsed(0, mobile);
     fTrackList->SetMobile(mobile);
     fArtists->TrackList()->SetMobile(mobile);
