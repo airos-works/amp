@@ -186,7 +186,7 @@ void AlbumGridView::MouseDown(BPoint where)
         ShowContextMenu(index, where);
         return;
     }
-    if (clicks >= 2) {
+    if (fMobile || clicks >= 2) {
         BMessage* message = ShowSongsMessage(fAlbums[index]);
         Window()->PostMessage(message);
         delete message;

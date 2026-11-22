@@ -1,4 +1,10 @@
 #include "TrackListView.h"
+#if __has_include(<MobileKit.h>)
+#include <MobileKit.h>
+#else
+#include "compat/MobileKit.h"
+#endif
+
 #include "App.h"
 #include "Theme.h"
 #include "Icons.h"
@@ -138,6 +144,23 @@ void TrackListView::SelectTrack(int64_t trackId, bool scrollTo)
     }
 }
 
+float TrackListView::RowHeight() const
+{
+    return fMobile ? BMobileKit::TargetSize() : theme::kRowHeight;
+}
+
+void TrackListView::SetMobile(bool mobile)
+{
+    fMobile = mobile;
+    if (fHeaderView != nullptr) {
+        if (mobile) fHeaderView->Hide();
+        else fHeaderView->Show();
+    }
+    Relayout();
+    UpdateScrollBar();
+    Invalidate();
+}
+
 void TrackListView::Relayout()
 {
     fGroups.clear();
@@ -160,7 +183,7 @@ void TrackListView::Relayout()
             if (fGroups.empty() || !sameAlbum(previous, track)) {
                 if (!fGroups.empty()) {
                     Group& last = fGroups.back();
-                    last.height = std::max(kGroupMinHeight, last.rowCount * theme::kRowHeight);
+                    last.height = std::max(kGroupMinHeight, last.rowCount * RowHeight());
                     y += last.height;
                 }
                 Group group;
@@ -193,7 +216,7 @@ void TrackListView::Relayout()
         }
         if (!fGroups.empty()) {
             Group& last = fGroups.back();
-            last.height = std::max(kGroupMinHeight, last.rowCount * theme::kRowHeight);
+            last.height = std::max(kGroupMinHeight, last.rowCount * RowHeight());
         }
     }
     LayoutColumns();
@@ -208,7 +231,7 @@ float TrackListView::ContentHeight() const
         const Group& last = fGroups.back();
         return last.top + last.height;
     }
-    return fTracks.size() * theme::kRowHeight;
+    return fTracks.size() * RowHeight();
 }
 
 void TrackListView::UpdateScrollBar()
@@ -221,7 +244,7 @@ void TrackListView::UpdateScrollBar()
     float max = std::max(0.0f, content - visible);
     bar->SetRange(0, max);
     bar->SetProportion(content > 0 ? std::min(1.0f, visible / content) : 1.0f);
-    bar->SetSteps(theme::kRowHeight, std::max(theme::kRowHeight, visible - theme::kRowHeight));
+    bar->SetSteps(RowHeight(), std::max(RowHeight(), visible - RowHeight()));
 }
 
 void TrackListView::FrameResized(float width, float height)
@@ -271,10 +294,10 @@ BRect TrackListView::RowRect(int row) const
         if (g < 0)
             return BRect();
         const Group& group = fGroups[g];
-        top = group.top + (row - group.firstRow) * theme::kRowHeight;
+        top = group.top + (row - group.firstRow) * RowHeight();
     } else
-        top = row * theme::kRowHeight;
-    return BRect(RowsLeft(), top, Bounds().right, top + theme::kRowHeight - 1);
+        top = row * RowHeight();
+    return BRect(RowsLeft(), top, Bounds().right, top + RowHeight() - 1);
 }
 
 int TrackListView::RowAt(BPoint where) const
@@ -286,12 +309,12 @@ int TrackListView::RowAt(BPoint where) const
         if (g < 0)
             return -1;
         const Group& group = fGroups[g];
-        int row = group.firstRow + (int)((where.y - group.top) / theme::kRowHeight);
+        int row = group.firstRow + (int)((where.y - group.top) / RowHeight());
         if (row >= group.firstRow + group.rowCount)
             return -1;
         return row;
     }
-    int row = (int)(where.y / theme::kRowHeight);
+    int row = (int)(where.y / RowHeight());
     return (row >= 0 && row < (int)fTracks.size()) ? row : -1;
 }
 
@@ -390,6 +413,25 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
     rgb_color text = selected ? theme::Colors().selectedText : theme::Colors().listText;
     float left = rect.left;
     bool isCurrent = track->id == fNowPlaying && fNowState != kStopped;
+    if (fMobile) {
+        SetFont(be_bold_font);
+        SetHighColor(text);
+        float middle = (rect.top + rect.bottom) / 2;
+        float inset = be_plain_font->Size();
+        BRect title(rect.left + inset, rect.top, rect.right - 64, middle);
+        DrawTruncated(this, track->title.c_str(), title);
+        SetFont(be_plain_font);
+        SetHighColor(selected ? text : theme::Colors().listSecondaryText);
+        BString detail(track->artist.c_str());
+        if (!track->album.empty()) {
+            if (!detail.IsEmpty()) detail << " — ";
+            detail << track->album.c_str();
+        }
+        DrawTruncated(this, detail.String(), BRect(title.left, middle, title.right, rect.bottom));
+        DrawTruncated(this, CellText(*track, kFieldTime).String(),
+            BRect(title.right, rect.top, rect.right - inset, rect.bottom), B_ALIGN_RIGHT);
+        return;
+    }
     for (const Column& c : fColumns) {
         BRect cell(left, rect.top, left + c.width - 1, rect.bottom);
         left += c.width;
@@ -432,11 +474,11 @@ void TrackListView::DrawGroup(const Group& group, BRect rect)
         artistLine << "  (" << group.year << ")";
     DrawTruncated(this, artistLine.String(), BRect(cell.left + 6, title.bottom + 1, cell.right - 6, title.bottom + 16), B_ALIGN_CENTER, 0);
     // the empty area under short groups continues the striping of the rows
-    float rowsBottom = group.top + group.rowCount * theme::kRowHeight;
+    float rowsBottom = group.top + group.rowCount * RowHeight();
     if (rowsBottom < group.top + group.height) {
         int row = group.firstRow + group.rowCount;
-        for (float y = rowsBottom; y < group.top + group.height; y += theme::kRowHeight, row++) {
-            BRect stripe(kArtColumnWidth, y, rect.right, std::min(y + theme::kRowHeight - 1, group.top + group.height - 1));
+        for (float y = rowsBottom; y < group.top + group.height; y += RowHeight(), row++) {
+            BRect stripe(kArtColumnWidth, y, rect.right, std::min(y + RowHeight() - 1, group.top + group.height - 1));
             SetHighColor(row % 2 ? theme::Colors().listStripe : theme::Colors().listBackground);
             FillRect(stripe);
         }
@@ -474,8 +516,8 @@ void TrackListView::Draw(BRect updateRect)
             }
         }
     } else {
-        int first = std::max(0, (int)(updateRect.top / theme::kRowHeight));
-        int last = std::min((int)fTracks.size() - 1, (int)(updateRect.bottom / theme::kRowHeight) + 1);
+        int first = std::max(0, (int)(updateRect.top / RowHeight()));
+        int last = std::min((int)fTracks.size() - 1, (int)(updateRect.bottom / RowHeight()) + 1);
         for (int row = first; row <= last; row++)
             DrawRow(row, RowRect(row), fSelection.count(row) != 0, active);
     }
@@ -699,7 +741,7 @@ void TrackListView::MouseDown(BPoint where)
         PostSelectionChanged();
         return;
     }
-    if (clicks >= 2 && fSelection.count(row)) {
+    if (fMobile || (clicks >= 2 && fSelection.count(row))) {
         PlayRow(row);
         return;
     }
@@ -784,7 +826,7 @@ int TrackListView::DropIndexAt(BPoint where) const
     if (fTracks.empty())
         return 0;
     float y = where.y;
-    int index = (int)((y + theme::kRowHeight / 2) / theme::kRowHeight);
+    int index = (int)((y + RowHeight() / 2) / RowHeight());
     return std::max(0, std::min((int)fTracks.size(), index));
 }
 
@@ -896,7 +938,7 @@ void TrackListView::KeyDown(const char* bytes, int32 numBytes)
         }
         case B_PAGE_DOWN:
         case B_PAGE_UP: {
-            int rows = (int)(Bounds().Height() / theme::kRowHeight) - 1;
+            int rows = (int)(Bounds().Height() / RowHeight()) - 1;
             int row = fFocusRow < 0 ? 0 : fFocusRow + (bytes[0] == B_PAGE_DOWN ? rows : -rows);
             row = std::max(0, std::min((int)fTracks.size() - 1, row));
             fSelection.clear();

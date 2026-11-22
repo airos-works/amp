@@ -1,4 +1,10 @@
 #include "MainWindow.h"
+#if __has_include(<MobileKit.h>)
+#include <MobileKit.h>
+#else
+#include "compat/MobileKit.h"
+#endif
+
 #include "App.h"
 #include "NameDialog.h"
 #include "SettingsWindow.h"
@@ -26,6 +32,43 @@ const uint32 kMsgReloadNow = 'rlnw';
 const uint32 kMsgActivityExpired = 'acex';   // "id": a finished activity leaves the display
 const uint32 kMsgSelectNowPlaying = 'slnp';  // "track": selected once the shown list is laid out
 }
+
+class NowPlayingCover : public BView {
+public:
+    NowPlayingCover() : BView("album-cover", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
+    {
+        SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+    }
+
+    void SetTrack(const ArtRequest& art, const BString& title, const BString& artist)
+    {
+        fArt = art;
+        fTitle = title;
+        fArtist = artist;
+        Invalidate();
+    }
+
+    void Draw(BRect) override
+    {
+        BRect area = Bounds();
+        float line = be_plain_font->Size() * 2;
+        float side = std::max(0.0f, std::min(area.Width() - line, area.Height() - 3 * line));
+        BRect cover(0, 0, side, side);
+        cover.OffsetTo((area.Width() - side) / 2, line / 2);
+        BBitmap* bitmap = fArt.key.empty() ? nullptr : App()->Art().Get(fArt.key, 384, &fArt);
+        DrawArtworkOnPage(this, bitmap, cover);
+        SetHighUIColor(B_PANEL_TEXT_COLOR);
+        SetFont(be_bold_font);
+        BRect title(area.left, cover.bottom + line / 3, area.right, cover.bottom + line * 1.4f);
+        DrawTruncated(this, fTitle.String(), title, B_ALIGN_CENTER);
+        SetFont(be_plain_font);
+        DrawTruncated(this, fArtist.String(), title.OffsetByCopy(0, line), B_ALIGN_CENTER);
+    }
+
+private:
+    ArtRequest fArt;
+    BString fTitle, fArtist;
+};
 
 MainWindow::MainWindow(BRect frame)
     : BWindow(frame, "Amp", B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE)
@@ -68,10 +111,39 @@ MainWindow::MainWindow(BRect frame)
     float sidebarWidth = std::max(200, std::min(420, settings.sidebarWidth));
     fSplit->SetItemWeight(0, sidebarWidth, false);
     fSplit->SetItemWeight(1, frame.Width() - sidebarWidth, true);
+    auto* library = new BMobileKit::Bar("mobile-library");
+    auto addSource = [library](const char* source, const char* label) {
+        auto* select = new BMessage(kMsgSourceSelected);
+        select->AddString("source", source);
+        library->AddAction(source, label, select);
+    };
+    addSource("music", "Songs");
+    addSource("albums", "Albums");
+    addSource("artists", "Artists");
+    library->AddAction("settings", "Settings", new BMessage(kMsgShowSettings));
+    fMobileLibrary = library;
+    fCover = new NowPlayingCover;
+    fProgress = BMobileKit::Slider("song-position", "Position", new BMessage('mSek'), 0, 1000);
+    fNowPlayingPage = new BGroupView("now-playing-page", B_VERTICAL);
+    BLayoutBuilder::Group<>(fNowPlayingPage).SetInsets(B_USE_DEFAULT_SPACING)
+        .Add(fCover, 1).Add(fProgress);
+    fNowPlayingPage->Hide();
+    auto* mini = new BMobileKit::Bar("mobile-player");
+    fMobileTrack = mini->AddAction("now-playing", "Now Playing", new BMessage('mNow'));
+    fMobileTrack->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, BMobileKit::TargetSize()));
+    mini->AddAction("previous", "Previous", new BMessage(kMsgPrevious));
+    fMobilePlay = mini->AddAction("play", "Play", new BMessage(kMsgPlayPause));
+    mini->AddAction("next", "Next", new BMessage(kMsgNext));
+    fMobilePlayer = mini;
+    fMobileLibrary->Hide();
+    fMobilePlayer->Hide();
     BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+        .Add(fMobileLibrary)
         .Add(fToolbar)
         .Add(fSplit)
-        .Add(fStatus);
+        .Add(fStatus)
+        .Add(fNowPlayingPage)
+        .Add(fMobilePlayer);
     BuildMenu();
     fToolbar->SetVolume(settings.volume);
     fToolbar->SetViewMode(fViewMode);
@@ -84,6 +156,44 @@ MainWindow::MainWindow(BRect frame)
     ReloadSidebar();
     fSidebar->Select(fSource.c_str(), 0);
     ReloadContent();
+    BMobileKit::PrepareWindow(this, [this](bool mobile) { SetMobile(mobile); });
+}
+
+void MainWindow::ShowPlayerPage(bool show)
+{
+    if (show == !fNowPlayingPage->IsHidden(fNowPlayingPage)) return;
+    if (show) {
+        fSplit->Hide();
+        fNowPlayingPage->Show();
+    } else {
+        fNowPlayingPage->Hide();
+        fSplit->Show();
+    }
+}
+
+void MainWindow::SetMobile(bool mobile)
+{
+    if (mobile == fMobile)
+        return;
+    fMobile = mobile;
+    if (mobile) {
+        fDesktopFrame = Frame();
+        fToolbar->Hide();
+        fStatus->Hide();
+        fMobileLibrary->Show();
+        fMobilePlayer->Show();
+    } else {
+        ShowPlayerPage(false);
+        fMobileLibrary->Hide();
+        fMobilePlayer->Hide();
+        fToolbar->Show();
+        fStatus->Show();
+    }
+    fSplit->SetItemCollapsed(0, mobile);
+    fTrackList->SetMobile(mobile);
+    fArtists->TrackList()->SetMobile(mobile);
+    fGrid->SetMobile(mobile);
+    UpdateNowPlaying();
 }
 
 void MainWindow::OpenArtistPage(int64_t artistId)
@@ -221,7 +331,7 @@ bool MainWindow::QuitRequested()
 
 void MainWindow::SaveGeometry()
 {
-    BRect frame = Frame();
+    BRect frame = fMobile ? fDesktopFrame : Frame();
     App()->GetSettings().Modify([&](SettingsData& d) {
         d.windowX = (int)frame.left;
         d.windowY = (int)frame.top;
@@ -232,7 +342,7 @@ void MainWindow::SaveGeometry()
         d.selectedSource = fSource == "playlist" || fSource == "minidisc" ? "music" : fSource;
         // the split item is the scroll view (list plus scroll bar), not the list alone
         BView* sidebarItem = fSidebar->Parent() ? fSidebar->Parent() : fSidebar;
-        d.sidebarWidth = (int)sidebarItem->Frame().Width();
+        if (!fMobile) d.sidebarWidth = (int)sidebarItem->Frame().Width();
         d.volume = App()->GetPlayer().Volume();
         d.shuffle = App()->GetPlayer().Shuffle();
         d.repeat = (int)App()->GetPlayer().Repeat();
@@ -638,6 +748,15 @@ void MainWindow::UpdateNowPlaying()
             art = App()->Art().RequestFor(key, albumArtist, t->album, t->uri, false);
         }
     }
+    BString trackLabel(title);
+    if (!artist.IsEmpty()) trackLabel << " — " << artist;
+    if (trackLabel.IsEmpty()) trackLabel = "Now Playing";
+    fMobileTrack->SetToolTip(trackLabel.String());
+    be_plain_font->TruncateString(&trackLabel, B_TRUNCATE_END, BMobileKit::TargetSize() * 4);
+    fMobileTrack->SetLabel(trackLabel.String());
+    fMobilePlay->SetLabel(fPlayerState == kPlaying ? "Pause" : "Play");
+    fCover->SetTrack(art, title.IsEmpty() ? BString("Nothing playing") : title, artist);
+    fProgress->SetEnabled(player.DurationMs() > 0);
     fToolbar->SetTrackInfo(title, artist, album);
     fToolbar->SetArtwork(art);
     fToolbar->SetQuality(QualityFor(fNowPlayingTrack));
@@ -667,6 +786,15 @@ void MainWindow::MessageReceived(BMessage* message)
     Player& player = App()->GetPlayer();
     Library& library = App()->GetLibrary();
     switch (message->what) {
+        case 'mNow':
+            ShowPlayerPage(fNowPlayingPage->IsHidden(fNowPlayingPage));
+            break;
+        case 'mSek':
+            player.Seek((int64_t)(fProgress->Position() * (double)player.DurationMs()));
+            break;
+        case BMobileKit::B_MOBILE_VIEW_CHANGED:
+            SetMobile(message->GetBool("mobile", false));
+            break;
         case B_COLORS_UPDATED:
             // the system switched between light and dark: every view paints from the palette
             // that goes with the new colours
@@ -742,6 +870,7 @@ void MainWindow::MessageReceived(BMessage* message)
             break;
         }
         case kMsgSourceSelected: {
+            if (fMobile) ShowPlayerPage(false);
             const char* source = nullptr;
             int64 playlistId = 0;
             bool play = false;
@@ -937,6 +1066,12 @@ void MainWindow::MessageReceived(BMessage* message)
             message->FindInt64("track", &track);
             if (track != fNowPlayingTrack || player.State() != fPlayerState)
                 UpdateNowPlaying();
+            if (fMobile && !fNowPlayingPage->IsHidden() && duration > 0) {
+                BPoint point;
+                uint32 buttons;
+                fProgress->GetMouse(&point, &buttons, false);
+                if (buttons == 0) fProgress->SetPosition((float)((double)position / duration));
+            }
             fToolbar->SetProgress(position, duration);
             break;
         }
@@ -990,6 +1125,7 @@ void MainWindow::MessageReceived(BMessage* message)
             }
             break;
         case kMsgArtReady:
+            fCover->Invalidate();
             fToolbar->ArtworkChanged();
             fTrackList->Refresh();
             fGrid->Refresh();

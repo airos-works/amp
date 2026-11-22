@@ -1,4 +1,5 @@
 resource app_signature "application/x-vnd.Amp";
+resource(1, "Mobile Kit") #'MOBV' $"01";
 resource app_flags B_SINGLE_LAUNCH;
 resource vector_icon {
     import "branding/amp-icon.hvif"

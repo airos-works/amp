@@ -28,6 +28,7 @@ public:
     // editable playlist (empty = rows are the playlist itself, which also allows reordering).
     void SetTracks(const std::vector<int64_t>& ids, int mode, int64_t playlistId,
         const std::vector<int32>& positions = std::vector<int32>());
+    void SetMobile(bool mobile);
     void SetNowPlaying(int64_t trackId, PlayerState state);
     std::vector<int64_t> SelectedTracks() const;
     std::vector<int32> SelectedPositions() const;
@@ -70,6 +71,8 @@ private:
         std::string name, artist, artKey, localHint;
         int year;
     };
+    float RowHeight() const;
+    bool fMobile = false;
     void Relayout();
     void UpdateScrollBar();
     float ContentHeight() const;

@@ -18,6 +18,7 @@ struct AlbumCell {
 
 class AlbumGridView : public BView {
 public:
+    void SetMobile(bool mobile) { fMobile = mobile; }
     AlbumGridView();
     void SetCells(std::vector<AlbumCell> cells);
     void Refresh() { Invalidate(); }
@@ -30,6 +31,7 @@ public:
     void WindowActivated(bool active) override { Invalidate(); }
 
 private:
+    bool fMobile = false;
     void Relayout();
     float ContentHeight() const;
     float MaxScroll() const;

@@ -8,14 +8,19 @@
 #include "ToolbarView.h"
 #include "TrackListView.h"
 #include "player/Messages.h"
+#include <Button.h>
+#include <GroupView.h>
 #include <CardLayout.h>
 #include <SplitView.h>
+#include <Slider.h>
 #include <String.h>
 #include <Window.h>
 #include <map>
 #include <string>
 
 namespace amp {
+
+class NowPlayingCover;
 
 class MainWindow : public BWindow {
 public:
@@ -70,6 +75,18 @@ private:
     void LibraryScanProgress(const BString& text, bool done, int processed, int total);
     // takes a finished activity off the display after a while
     void ExpireActivity(const char* id, bigtime_t after);
+
+    BGroupView* fMobileLibrary;
+    BGroupView* fMobilePlayer;
+    BGroupView* fNowPlayingPage;
+    NowPlayingCover* fCover;
+    BSlider* fProgress;
+    void ShowPlayerPage(bool show);
+    BButton* fMobileTrack;
+    BButton* fMobilePlay;
+    bool fMobile = false;
+    BRect fDesktopFrame;
+    void SetMobile(bool mobile);
 
     ToolbarView* fToolbar;
     SidebarView* fSidebar;
