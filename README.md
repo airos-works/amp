@@ -6,14 +6,14 @@ Amp is a native music player for Haiku styled after iTunes 8. It plays a local l
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `dbc0824` on 2026-11-22 ([all files](https://github.com/airos-works/amp/releases/tag/latest)).
+Built automatically by air/OS CI from commit `f0614a5` on 2026-11-23 ([all files](https://github.com/airos-works/amp/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|
-| arm64 | [amp-0.3.5.alpha-18-arm64.hpkg](https://github.com/airos-works/amp/releases/download/latest/amp-0.3.5.alpha-18-arm64.hpkg) |
-| x86_64 | [amp-0.3.5.alpha-18-x86_64.hpkg](https://github.com/airos-works/amp/releases/download/latest/amp-0.3.5.alpha-18-x86_64.hpkg) |
+| arm64 | [amp-0.3.5.alpha-19-arm64.hpkg](https://github.com/airos-works/amp/releases/download/latest/amp-0.3.5.alpha-19-arm64.hpkg) |
+| x86_64 | [amp-0.3.5.alpha-19-x86_64.hpkg](https://github.com/airos-works/amp/releases/download/latest/amp-0.3.5.alpha-19-x86_64.hpkg) |
 
-Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2851-g65e27ef73f, arm64 hrev60207-2851-g65e27ef73f.
+Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2861-gd7c5d00807, arm64 hrev60207-2861-gd7c5d00807.
 <!-- airos-ci:latest-builds:end -->
 
 ## Features
