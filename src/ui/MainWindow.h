@@ -7,6 +7,7 @@
 #include "StatusBarView.h"
 #include "ToolbarView.h"
 #include "TrackListView.h"
+#include "core/Model.h"
 #include "player/Messages.h"
 #include <Button.h>
 #include <GroupView.h>
@@ -17,6 +18,16 @@
 #include <Window.h>
 #include <map>
 #include <string>
+
+namespace BMobileKit {
+class MetalBar;
+class MetalButton;
+class MetalSlider;
+class NowPlayingDisplay;
+class SearchField;
+class SegmentedControl;
+class WoodFrame;
+}
 
 namespace amp {
 
@@ -42,7 +53,8 @@ private:
     void ReloadContent();
     void ReloadSidebar();
     void UpdateSummary(const std::vector<int64_t>& tracks);
-    int CurrentViewMode() const { return fSource == "playlist" ? fPlaylistViewMode : fViewMode; }
+    // the touch library lists songs plainly: its albums and artists have tabs of their own
+    int CurrentViewMode() const { return fMobile ? 0 : fSource == "playlist" ? fPlaylistViewMode : fViewMode; }
     // the view buttons pick how songs are listed: the albums, artists and MiniDisc views have
     // a layout of their own
     bool ViewModeApplies() const { return fSource != "albums" && fSource != "artists" && fSource != "minidisc"; }
@@ -76,17 +88,37 @@ private:
     // takes a finished activity off the display after a while
     void ExpireActivity(const char* id, bigtime_t after);
 
-    BGroupView* fMobileLibrary;
-    BGroupView* fMobilePlayer;
-    BGroupView* fNowPlayingPage;
+    // The touch presentation, after the iPad's Music app: an aluminium bar with the
+    // transport, the display and the volume above the library, which lies between wooden
+    // rails, and a bar with Back or Settings, the library's tabs and the search field below.
+    // The display's cover opens the playing song's cover on a black stage.
+    BMobileKit::MetalBar* fMobileTop;
+    BMobileKit::MetalBar* fMobileBottom;
+    BMobileKit::SegmentedControl* fMobileTransport;
+    BMobileKit::NowPlayingDisplay* fMobileDisplay;
+    BMobileKit::MetalSlider* fMobileVolume;
+    BMobileKit::SegmentedControl* fMobileTabs;
+    BMobileKit::MetalButton* fMobileBack;
+    BMobileKit::MetalButton* fMobileSettings;
+    BMobileKit::SearchField* fMobileSearch;
+    BMobileKit::WoodFrame* fFrame;
     NowPlayingCover* fCover;
-    BSlider* fProgress;
-    void ShowPlayerPage(bool show);
-    BButton* fMobileTrack;
-    BButton* fMobilePlay;
+    ArtRequest fNowPlayingArt;
+    // the tab the touch library shows; drilling into an album, an artist or a playlist
+    // keeps it, and Back returns to it
+    std::string fMobileHome = "music";
+    bool fMobileMiniDisc = false;      // the MiniDisc tab is there (a recorder is connected)
     bool fMobile = false;
     BRect fDesktopFrame;
     void SetMobile(bool mobile);
+    void ShowPlayerPage(bool show);
+    bool PlayerPageShown() const;
+    void UpdateMobileChrome();
+    void UpdateMobileTabs();
+    void UpdateMobileArtwork();
+    void ShowArtistSongs(int64_t artistId);
+    std::vector<AlbumCell> CellsFromArtists() const;
+    std::vector<AlbumCell> CellsFromPlaylists() const;
 
     ToolbarView* fToolbar;
     SidebarView* fSidebar;

@@ -73,6 +73,13 @@ private:
     };
     float RowHeight() const;
     bool fMobile = false;
+    // a finger on the list: a tap plays the row, a drag scrolls
+    bool fTouching = false;
+    int fTouchRow = -1;
+    bool fTouchScrolling = false;
+    BPoint fTouchStart;
+    float fTouchScroll = 0;
+    bool TouchMoved(BPoint where);
     void Relayout();
     void UpdateScrollBar();
     float ContentHeight() const;

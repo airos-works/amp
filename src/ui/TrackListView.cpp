@@ -1,9 +1,7 @@
 #include "TrackListView.h"
-#if __has_include(<MobileKit.h>)
-#include <MobileKit.h>
-#else
+// Amp keeps its own copy of the header-only Mobile Kit: the SDKs it is built with may
+// carry an older one (or none), and it uses the version 2 materials.
 #include "compat/MobileKit.h"
-#endif
 
 #include "App.h"
 #include "Theme.h"
@@ -419,7 +417,16 @@ void TrackListView::DrawRow(int row, BRect rect, bool selected, bool active)
         SetHighColor(text);
         float middle = (rect.top + rect.bottom) / 2;
         float inset = be_plain_font->Size();
-        BRect title(rect.left + inset, rect.top, rect.right - 64, middle);
+        float marker = ceilf(inset * 1.8f);
+        if (isCurrent) {
+            // the playing song: a speaker in the margin, as on the desktop
+            BRect speaker(rect.left + inset * 0.4f, middle - inset * 0.5f, rect.left + inset * 0.4f + inset,
+                middle + inset * 0.5f);
+            BMobileKit::DrawGlyph(this, fNowState == kPlaying ? BMobileKit::B_GLYPH_SPEAKER_LOUD
+                : BMobileKit::B_GLYPH_SPEAKER, speaker,
+                selected ? theme::Colors().selectedText : theme::Colors().accent);
+        }
+        BRect title(rect.left + marker, rect.top, rect.right - 64, middle);
         DrawTruncated(this, track->title.c_str(), title);
         SetFont(be_plain_font);
         SetHighColor(selected ? text : theme::Colors().listSecondaryText);
@@ -718,6 +725,20 @@ void TrackListView::MouseDown(BPoint where)
         ShowContextMenu(row, where);
         return;
     }
+    if (fMobile) {
+        // nothing plays until the finger lifts: it may be the start of a drag
+        fTouching = true;
+        fTouchRow = row;
+        fTouchScrolling = false;
+        fTouchStart = ConvertToScreen(where);
+        fTouchScroll = Bounds().top;
+        fSelection.clear();
+        if (row >= 0)
+            fSelection.insert(row);
+        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+        Invalidate();
+        return;
+    }
     if (row < 0) {
         if (fMode == kGrouped && where.x < RowsLeft()) {
             int g = GroupAt(where);
@@ -742,7 +763,7 @@ void TrackListView::MouseDown(BPoint where)
         PostSelectionChanged();
         return;
     }
-    if (fMobile || (clicks >= 2 && fSelection.count(row))) {
+    if (clicks >= 2 && fSelection.count(row)) {
         PlayRow(row);
         return;
     }
@@ -772,8 +793,38 @@ void TrackListView::MouseDown(BPoint where)
     PostSelectionChanged();
 }
 
+bool TrackListView::TouchMoved(BPoint where)
+{
+    if (!fMobile || !fTouching)
+        return false;
+    // the list follows the finger (screen coordinates: the view moves under it)
+    float distance = ConvertToScreen(where).y - fTouchStart.y;
+    if (!fTouchScrolling && fabs(distance) > BMobileKit::TargetSize() * 0.2f) {
+        fTouchScrolling = true;
+        fSelection.clear();
+        Invalidate();
+    }
+    if (fTouchScrolling) {
+        float max = std::max(0.0f, ContentHeight() - Bounds().Height());
+        float top = std::max(0.0f, std::min(max, fTouchScroll - distance));
+        if (top != Bounds().top)
+            ScrollTo(0, top);
+    }
+    return true;
+}
+
 void TrackListView::MouseUp(BPoint where)
 {
+    if (fMobile && fTouching) {
+        int row = fTouchRow;
+        bool tapped = !fTouchScrolling && row >= 0 && RowAt(where) == row;
+        fTouching = false;
+        fTouchRow = -1;
+        fTouchScrolling = false;
+        if (tapped)
+            PlayRow(row);
+        return;
+    }
     if (fResizeColumn >= 0) {
         fResizeColumn = -1;
         return;
@@ -796,6 +847,8 @@ void TrackListView::MouseUp(BPoint where)
 
 void TrackListView::MouseMoved(BPoint where, uint32 transit, const BMessage* drag)
 {
+    if (!drag && TouchMoved(where))
+        return;
     if (fResizeColumn >= 0) {
         float width = std::max(30.0f, fResizeStartWidth + (where.x - fResizeStartX));
         fColumns[fResizeColumn].width = width;

@@ -1,9 +1,7 @@
 #include "MainWindow.h"
-#if __has_include(<MobileKit.h>)
-#include <MobileKit.h>
-#else
+// Amp keeps its own copy of the header-only Mobile Kit: the SDKs it is built with may
+// carry an older one (or none), and it uses the version 2 materials.
 #include "compat/MobileKit.h"
-#endif
 
 #include "App.h"
 #include "NameDialog.h"
@@ -22,6 +20,7 @@
 #include <atomic>
 #include <cstdio>
 #include <map>
+#include <set>
 #include <thread>
 
 namespace amp {
@@ -33,42 +32,91 @@ const uint32 kMsgActivityExpired = 'acex';   // "id": a finished activity leaves
 const uint32 kMsgSelectNowPlaying = 'slnp';  // "track": selected once the shown list is laid out
 }
 
+namespace mk = BMobileKit;
+
+namespace {
+// the touch presentation's commands
+const uint32 kMsgMobileSeek = 'mSek';     // "fraction": a drag along the display's scrubber ended
+const uint32 kMsgMobileCover = 'mNow';    // the display's cover or the stage: shows or hides the stage
+const uint32 kMsgMobileVolume = 'mVol';
+const uint32 kMsgMobileTab = 'mTab';      // "index" into kMobileTabs
+const uint32 kMsgMobileBack = 'mBck';
+const uint32 kMsgMobileSearch = 'mSrc';
+
+struct MobileTab {
+    const char* source;
+    const char* label;
+};
+// "playlists" is the touch library's own source: the playlists as tiles
+const MobileTab kMobileTabs[] = {
+    {"playlists", "Playlists"},
+    {"music", "Songs"},
+    {"artists", "Artists"},
+    {"albums", "Albums"},
+    {"minidisc", "MiniDisc"},
+};
+const int32 kMobileTabCount = 5;
+
+void SetShown(BView* view, bool shown)
+{
+    // Hide() and Show() nest: only change a view that is not already as wanted
+    if (view->IsHidden(view) == shown) {
+        if (shown)
+            view->Show();
+        else
+            view->Hide();
+    }
+}
+}
+
+// The playing song's cover on a black stage, standing on its reflection.
 class NowPlayingCover : public BView {
 public:
-    NowPlayingCover() : BView("album-cover", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
+    NowPlayingCover() : BView("now-playing-cover", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
     {
         SetExplicitMinSize(BSize(0, 0));
-        SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+        SetViewColor(B_TRANSPARENT_COLOR);
     }
 
-    void SetTrack(const ArtRequest& art, const BString& title, const BString& artist)
+    void SetTrack(const ArtRequest& art)
     {
         fArt = art;
-        fTitle = title;
-        fArtist = artist;
         Invalidate();
     }
 
-    void Draw(BRect) override
+    void Draw(BRect update) override
     {
+        const mk::Skin& skin = mk::CurrentSkin();
+        SetHighColor(skin.stage);
+        FillRect(update);
         BRect area = Bounds();
-        float line = be_plain_font->Size() * 2;
-        float side = std::max(0.0f, std::min(area.Width() - line, area.Height() - 3 * line));
-        BRect cover(0, 0, side, side);
-        cover.OffsetTo((area.Width() - side) / 2, line / 2);
-        BBitmap* bitmap = fArt.key.empty() ? nullptr : App()->Art().Get(fArt.key, 384, &fArt);
-        DrawArtworkOnPage(this, bitmap, cover);
-        SetHighUIColor(B_PANEL_TEXT_COLOR);
-        SetFont(be_bold_font);
-        BRect title(area.left, cover.bottom + line / 3, area.right, cover.bottom + line * 1.4f);
-        DrawTruncated(this, fTitle.String(), title, B_ALIGN_CENTER);
-        SetFont(be_plain_font);
-        DrawTruncated(this, fArtist.String(), title.OffsetByCopy(0, line), B_ALIGN_CENTER);
+        float margin = mk::TargetSize() * 0.6f;
+        // the cover and a quarter of its height of reflection fit between the margins
+        float side = std::max(0.0f, std::min(area.Width() - 2 * margin, (area.Height() - 2 * margin) / 1.25f));
+        if (side < 8)
+            return;
+        BRect cover(0, 0, side - 1, side - 1);
+        cover.OffsetTo(floorf((area.Width() - side) / 2), floorf((area.Height() - side * 1.25f) / 2));
+        int size = std::min(1024, (int)side);
+        BBitmap* bitmap = fArt.key.empty() ? nullptr : App()->Art().Get(fArt.key, size, &fArt);
+        if (bitmap == nullptr) {
+            DrawArtPlaceholder(this, cover);
+            return;
+        }
+        BRect shown = FittedRect(bitmap, cover);
+        shown.OffsetBy(0, cover.bottom - shown.bottom); // stands on the floor
+        DrawBitmap(bitmap, bitmap->Bounds(), shown, B_FILTER_BITMAP_BILINEAR);
+        mk::DrawReflection(this, bitmap, shown, side * 0.25f, skin.stage);
+    }
+
+    void MouseUp(BPoint where) override
+    {
+        if (Bounds().Contains(where))
+            Window()->PostMessage(kMsgMobileCover);
     }
 
 private:
     ArtRequest fArt;
-    BString fTitle, fArtist;
 };
 
 MainWindow::MainWindow(BRect frame)
@@ -112,39 +160,76 @@ MainWindow::MainWindow(BRect frame)
     float sidebarWidth = std::max(200, std::min(420, settings.sidebarWidth));
     fSplit->SetItemWeight(0, sidebarWidth, false);
     fSplit->SetItemWeight(1, frame.Width() - sidebarWidth, true);
-    auto* library = new BMobileKit::Bar("mobile-library");
-    auto addSource = [library](const char* source, const char* label) {
-        auto* select = new BMessage(kMsgSourceSelected);
-        select->AddString("source", source);
-        library->AddAction(source, label, select);
-    };
-    addSource("music", "Songs");
-    addSource("albums", "Albums");
-    addSource("artists", "Artists");
-    library->AddAction("settings", "Settings", new BMessage(kMsgShowSettings));
-    fMobileLibrary = library;
+    // the touch presentation's bars, hidden on the desktop
+    fMobileTop = new mk::MetalBar("mobile-top", mk::B_MOBILE_TOP_BAR);
+    fMobileTransport = new mk::SegmentedControl("transport", nullptr, true);
+    fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_PREVIOUS, new BMessage(kMsgPrevious));
+    fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_PLAY, new BMessage(kMsgPlayPause));
+    fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_NEXT, new BMessage(kMsgNext));
+    fMobileDisplay = new mk::NowPlayingDisplay("display");
+    fMobileDisplay->SetIdleText("Amp");
+    fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_SEEK, new BMessage(kMsgMobileSeek));
+    fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_ARTWORK, new BMessage(kMsgMobileCover));
+    fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_REPEAT, new BMessage(kMsgToggleRepeat));
+    fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_SHUFFLE, new BMessage(kMsgToggleShuffle));
+    fMobileDisplay->SetShuffle(settings.shuffle);
+    fMobileDisplay->SetRepeat(settings.repeat);
+    fMobileVolume = new mk::MetalSlider("volume", new BMessage(kMsgMobileVolume));
+    fMobileVolume->SetModificationMessage(new BMessage(kMsgMobileVolume));
+    fMobileVolume->SetValue((int32)(settings.volume * 1000));
+    // the transport and the volume are as wide as each other: the display stays centred
+    float side = fMobileTransport->MinSize().width;
+    fMobileVolume->SetExplicitMinSize(BSize(side, B_SIZE_UNSET));
+    fMobileVolume->SetExplicitMaxSize(BSize(side, B_SIZE_UNSET));
+    fMobileTop->GroupLayout()->AddView(fMobileTransport);
+    fMobileTop->GroupLayout()->AddView(fMobileDisplay, 1.0f);
+    fMobileTop->GroupLayout()->AddView(fMobileVolume);
+
+    fMobileBottom = new mk::MetalBar("mobile-bottom", mk::B_MOBILE_BOTTOM_BAR);
+    fMobileBack = new mk::MetalButton("back", "Back", new BMessage(kMsgMobileBack), mk::B_BACK_BUTTON);
+    fMobileSettings = new mk::MetalButton("settings", "Settings", new BMessage(kMsgShowSettings),
+        mk::B_PILL_BUTTON);
+    fMobileTabs = new mk::SegmentedControl("tabs", new BMessage(kMsgMobileTab));
+    fMobileSearch = new mk::SearchField("search", "Search", new BMessage(kMsgMobileSearch));
+    // Back or Settings on the left, as wide as the search field on the right: the tabs
+    // stay centred. Both give way together on a narrow screen.
+    BSize sideMin(ceilf(mk::TargetSize() * 2.6f), B_SIZE_UNSET);
+    BSize sideMax(ceilf(mk::TargetSize() * 4.6f), B_SIZE_UNSET);
+    fMobileSearch->SetExplicitMinSize(sideMin);
+    fMobileSearch->SetExplicitMaxSize(sideMax);
+    BGroupLayout* leading;
+    BLayoutBuilder::Group<>(fMobileBottom->GroupLayout())
+        .AddGroup(B_HORIZONTAL, 0)
+            .GetLayout(&leading)
+            .Add(fMobileBack)
+            .Add(fMobileSettings)
+            .AddGlue()
+        .End()
+        .AddGlue()
+        .Add(fMobileTabs)
+        .AddGlue()
+        .Add(fMobileSearch);
+    leading->SetExplicitMinSize(sideMin);
+    leading->SetExplicitMaxSize(sideMax);
+    fMobileBack->Hide();
+    UpdateMobileTabs();
+
+    // the library and the stage share the space between the bars; on a tablet they lie
+    // between wooden rails
     fCover = new NowPlayingCover;
-    fProgress = BMobileKit::Slider("song-position", "Position", new BMessage('mSek'), 0, 1000);
-    fNowPlayingPage = new BGroupView("now-playing-page", B_VERTICAL);
-    BLayoutBuilder::Group<>(fNowPlayingPage).SetInsets(B_USE_DEFAULT_SPACING)
-        .Add(fCover, 1).Add(fProgress);
-    fNowPlayingPage->Hide();
-    auto* mini = new BMobileKit::Bar("mobile-player");
-    fMobileTrack = mini->AddAction("now-playing", "Now Playing", new BMessage('mNow'));
-    fMobileTrack->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, BMobileKit::TargetSize()));
-    mini->AddAction("previous", "Previous", new BMessage(kMsgPrevious));
-    fMobilePlay = mini->AddAction("play", "Play", new BMessage(kMsgPlayPause));
-    mini->AddAction("next", "Next", new BMessage(kMsgNext));
-    fMobilePlayer = mini;
-    fMobileLibrary->Hide();
-    fMobilePlayer->Hide();
+    BGroupView* stage = new BGroupView("library-stage", B_VERTICAL, 0);
+    stage->GroupLayout()->AddView(fSplit);
+    stage->GroupLayout()->AddView(fCover);
+    fCover->Hide();
+    fFrame = new mk::WoodFrame("library-frame", stage);
+    fMobileTop->Hide();
+    fMobileBottom->Hide();
     BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
-        .Add(fMobileLibrary)
+        .Add(fMobileTop)
         .Add(fToolbar)
-        .Add(fSplit)
+        .Add(fFrame)
         .Add(fStatus)
-        .Add(fNowPlayingPage)
-        .Add(fMobilePlayer);
+        .Add(fMobileBottom);
     BuildMenu();
     fToolbar->SetVolume(settings.volume);
     fToolbar->SetViewMode(fViewMode);
@@ -160,16 +245,24 @@ MainWindow::MainWindow(BRect frame)
     BMobileKit::PrepareWindow(this, [this](bool mobile) { SetMobile(mobile); });
 }
 
+bool MainWindow::PlayerPageShown() const
+{
+    return !fCover->IsHidden(fCover);
+}
+
 void MainWindow::ShowPlayerPage(bool show)
 {
-    if (show == !fNowPlayingPage->IsHidden(fNowPlayingPage)) return;
+    if (show == PlayerPageShown())
+        return;
     if (show) {
         fSplit->Hide();
-        fNowPlayingPage->Show();
+        fCover->Show();
     } else {
-        fNowPlayingPage->Hide();
+        fCover->Hide();
         fSplit->Show();
     }
+    // the cover's stage is black from edge to edge
+    fFrame->SetRails(fMobile && !show);
 }
 
 void MainWindow::SetMobile(bool mobile)
@@ -181,15 +274,24 @@ void MainWindow::SetMobile(bool mobile)
         fDesktopFrame = Frame();
         fToolbar->Hide();
         fStatus->Hide();
-        fMobileLibrary->Show();
-        fMobilePlayer->Show();
+        fMobileTop->Show();
+        fMobileBottom->Show();
+        fMobileHome = fSource == "playlist" ? "playlists" : fSource;
+        fMobileSearch->SetText(fSearch.c_str());
     } else {
         ShowPlayerPage(false);
-        fMobileLibrary->Hide();
-        fMobilePlayer->Hide();
+        fMobileTop->Hide();
+        fMobileBottom->Hide();
         fToolbar->Show();
         fStatus->Show();
+        // the playlist tiles and an artist's songs are the touch library's own pages
+        if (fSource == "playlists")
+            fSource = "music";
+        if (fSource == "artists")
+            ClearDrillDown();
+        fSidebar->Select(fSource.c_str(), fSource == "playlist" ? fPlaylistId : 0);
     }
+    fFrame->SetRails(mobile);
     // The desktop card layout takes the largest minimum of all its pages,
     // including the offscreen MiniDisc tools. The touch library can shrink
     // to the space between navigation, transport and the system keyboard.
@@ -197,10 +299,158 @@ void MainWindow::SetMobile(bool mobile)
     fContent->SetExplicitMinSize(minimum);
     fSplit->SetExplicitMinSize(minimum);
     fSplit->SetItemCollapsed(0, mobile);
+    // no splitter beside the collapsed sidebar
+    static float splitter = fSplit->SplitterSize();
+    fSplit->SetSplitterSize(mobile ? 0 : splitter);
     fTrackList->SetMobile(mobile);
     fArtists->TrackList()->SetMobile(mobile);
     fGrid->SetMobile(mobile);
+    UpdateMobileTabs();
+    ReloadContent();
     UpdateNowPlaying();
+}
+
+void MainWindow::UpdateMobileTabs()
+{
+    bool connected = App()->MiniDisc().State().connected;
+    if (fMobileTabs->CountSegments() > 0 && connected == fMobileMiniDisc)
+        return;
+    // the MiniDisc has a tab while a recorder is connected
+    fMobileMiniDisc = connected;
+    fMobileTabs->RemoveSegments();
+    for (int32 i = 0; i < kMobileTabCount; i++)
+        if (strcmp(kMobileTabs[i].source, "minidisc") != 0 || connected)
+            fMobileTabs->AddSegment(kMobileTabs[i].label);
+    UpdateMobileChrome();
+}
+
+void MainWindow::UpdateMobileChrome()
+{
+    if (!fMobile)
+        return;
+    int32 tab = -1;
+    const char* label = "Back";
+    for (int32 i = 0; i < kMobileTabCount && i < fMobileTabs->CountSegments(); i++)
+        if (fMobileHome == kMobileTabs[i].source) {
+            tab = i;
+            label = kMobileTabs[i].label;
+        }
+    fMobileTabs->Select(tab);
+    // an album, an artist's songs or a playlist opened from a tab: Back returns to the tab
+    bool drilled = fShownAlbum != 0 || !fDrillTracks.empty() || fSource == "playlist";
+    fMobileBack->SetLabel(label);
+    SetShown(fMobileBack, drilled);
+    SetShown(fMobileSettings, !drilled);
+}
+
+void MainWindow::UpdateMobileArtwork()
+{
+    BBitmap* bitmap = nullptr;
+    if (!fNowPlayingArt.key.empty())
+        bitmap = App()->Art().Get(fNowPlayingArt.key, (int)(mk::TargetSize() * 2), &fNowPlayingArt);
+    fMobileDisplay->SetArtwork(bitmap);
+}
+
+std::vector<AlbumCell> MainWindow::CellsFromArtists() const
+{
+    std::vector<AlbumCell> cells;
+    Library& library = App()->GetLibrary();
+    Library::Locker locker(library);
+    for (int64_t id : library.AllArtistIds()) {
+        const Artist* artist = library.ArtistById(id);
+        if (!artist || (!fSearch.empty() && !ContainsNoCase(artist->name, fSearch)))
+            continue;
+        AlbumCell cell;
+        cell.artistId = artist->id;
+        cell.name = artist->name.empty() ? "Unknown Artist" : artist->name;
+        cell.trackIds = artist->trackIds;
+        size_t songs = artist->trackIds.size(), albums = artist->albumIds.size();
+        BString caption;
+        caption << (int)songs << (songs == 1 ? " Song, " : " Songs, ") << (int)albums
+            << (albums == 1 ? " Album" : " Albums");
+        cell.caption = caption.String();
+        // the cover of one of their albums stands for the artist, as in the iPad's library
+        for (int64_t albumId : artist->albumIds) {
+            const Album* album = library.AlbumById(albumId);
+            if (!album)
+                continue;
+            AlbumCell::Cover cover;
+            cover.key = album->art;
+            cover.artist = album->artist;
+            cover.album = album->name;
+            if (!album->trackIds.empty())
+                if (const Track* first = library.TrackById(album->trackIds.front()))
+                    cover.hint = first->uri;
+            cell.mosaic.push_back(cover);
+            break;
+        }
+        cells.push_back(std::move(cell));
+    }
+    return cells;
+}
+
+std::vector<AlbumCell> MainWindow::CellsFromPlaylists() const
+{
+    std::vector<AlbumCell> cells;
+    Library& library = App()->GetLibrary();
+    Library::Locker locker(library);
+    for (int64_t id : library.AllPlaylistIds()) {
+        const Playlist* playlist = library.PlaylistById(id);
+        if (!playlist || (!fSearch.empty() && !ContainsNoCase(playlist->name, fSearch)))
+            continue;
+        AlbumCell cell;
+        cell.playlistId = playlist->id;
+        cell.name = playlist->name;
+        cell.trackIds = playlist->trackIds;
+        size_t songs = playlist->trackIds.size();
+        cell.caption = (BString() << (int)songs << (songs == 1 ? " Song" : " Songs")).String();
+        // the covers of its first four albums
+        std::vector<std::string> seen;
+        for (int64_t trackId : playlist->trackIds) {
+            const Track* t = library.TrackById(trackId);
+            if (!t)
+                continue;
+            AlbumCell::Cover cover;
+            const Album* album = library.AlbumById(t->albumId);
+            cover.artist = album ? album->artist : t->groupingArtist();
+            cover.album = album ? album->name : t->album;
+            cover.key = album ? album->art : t->art.empty() ? MakeAlbumArtKey(cover.artist, cover.album) : t->art;
+            cover.hint = t->uri;
+            if (std::find(seen.begin(), seen.end(), cover.key) != seen.end())
+                continue;
+            seen.push_back(cover.key);
+            cell.mosaic.push_back(cover);
+            if (cell.mosaic.size() == 4)
+                break;
+        }
+        cells.push_back(std::move(cell));
+    }
+    return cells;
+}
+
+void MainWindow::ShowArtistSongs(int64_t artistId)
+{
+    // the artist's songs album by album, under a Back button to the artists
+    ClearSearch();
+    fSource = "artists";
+    ClearDrillDown();
+    {
+        Library& library = App()->GetLibrary();
+        Library::Locker locker(library);
+        const Artist* artist = library.ArtistById(artistId);
+        if (!artist)
+            return;
+        std::set<int64_t> theirs(artist->trackIds.begin(), artist->trackIds.end());
+        for (int64_t albumId : artist->albumIds)
+            if (const Album* album = library.AlbumById(albumId))
+                for (int64_t id : album->trackIds)
+                    if (theirs.erase(id))
+                        fDrillTracks.push_back(id);
+        for (int64_t id : artist->trackIds)
+            if (theirs.count(id))
+                fDrillTracks.push_back(id);
+    }
+    ReloadContent();
 }
 
 void MainWindow::OpenArtistPage(int64_t artistId)
@@ -346,7 +596,7 @@ void MainWindow::SaveGeometry()
         d.windowH = (int)frame.Height();
         d.viewMode = fViewMode;
         d.playlistViewMode = fPlaylistViewMode;
-        d.selectedSource = fSource == "playlist" || fSource == "minidisc" ? "music" : fSource;
+        d.selectedSource = fSource == "playlist" || fSource == "playlists" || fSource == "minidisc" ? "music" : fSource;
         // the split item is the scroll view (list plus scroll bar), not the list alone
         BView* sidebarItem = fSidebar->Parent() ? fSidebar->Parent() : fSidebar;
         if (!fMobile) d.sidebarWidth = (int)sidebarItem->Frame().Width();
@@ -483,12 +733,28 @@ void MainWindow::ReloadContent()
     fLibraryDirty = false;
     fToolbar->SetViewMode(CurrentViewMode());
     fToolbar->SetViewButtonsShown(ViewModeApplies());
+    UpdateMobileChrome();
+    if (fMobile && fSource == "playlists") {
+        fGrid->SetEmptyText(fSearch.empty() ? "No Playlists" : "No Matching Playlists");
+        fGrid->SetCells(CellsFromPlaylists());
+        fCards->SetVisibleItem((int32)1);
+        return;
+    }
+    if (fMobile && fSource == "artists") {
+        if (fDrillTracks.empty()) {
+            fGrid->SetEmptyText(fSearch.empty() ? "No Artists" : "No Matching Artists");
+            fGrid->SetCells(CellsFromArtists());
+            fCards->SetVisibleItem((int32)1);
+            return;
+        }
+        // an artist's songs: shown below like any other drill-down
+    }
     if (fSource == "minidisc") {
         fCards->SetVisibleItem((int32)3);
         MiniDiscChanged();
         return;
     }
-    if (fSource == "artists") {
+    if (fSource == "artists" && !fMobile) {
         std::vector<int64_t> artists;
         {
             Library::Locker locker(library);
@@ -551,6 +817,7 @@ void MainWindow::ReloadContent()
     int viewMode = CurrentViewMode();
     bool grid = !drillDown && (fSource == "albums" || viewMode == 2);
     if (grid) {
+        fGrid->SetEmptyText(fSearch.empty() ? "No Albums" : "No Matching Albums");
         if (fSource == "playlist")
             fGrid->SetCells(CellsFromTracks(tracks));
         else
@@ -609,6 +876,7 @@ void MainWindow::ClearSearch()
         return;
     fSearch.clear(); // first, so the field's modification message finds nothing changed
     fToolbar->SearchField()->SetText("");
+    fMobileSearch->SetText("");
 }
 
 void MainWindow::SelectSource(const std::string& source, int64_t playlistId, bool play)
@@ -617,6 +885,11 @@ void MainWindow::SelectSource(const std::string& source, int64_t playlistId, boo
         ClearSearch();
     fSource = source;
     fPlaylistId = playlistId;
+    if (fMobile) {
+        // the tab stays on Playlists while one of them is open
+        fMobileHome = source == "playlist" ? "playlists" : source;
+        ShowPlayerPage(false);
+    }
     ClearDrillDown();
     fSidebar->Select(source.c_str(), playlistId);
     if (source == "minidisc")
@@ -709,6 +982,10 @@ int64_t MainWindow::ResolveShownAlbum(Library& library)
 
 void MainWindow::ShowArtist(int64_t artistId)
 {
+    if (fMobile) {
+        ShowArtistSongs(artistId);
+        return;
+    }
     ClearSearch(); // the artist may not match the search, and the filtered list would lack it
     fSource = "artists";
     ClearDrillDown();
@@ -755,15 +1032,14 @@ void MainWindow::UpdateNowPlaying()
             art = App()->Art().RequestFor(key, albumArtist, t->album, t->uri, false);
         }
     }
-    BString trackLabel(title);
-    if (!artist.IsEmpty()) trackLabel << " — " << artist;
-    if (trackLabel.IsEmpty()) trackLabel = "Now Playing";
-    fMobileTrack->SetToolTip(trackLabel.String());
-    be_plain_font->TruncateString(&trackLabel, B_TRUNCATE_END, BMobileKit::TargetSize() * 4);
-    fMobileTrack->SetLabel(trackLabel.String());
-    fMobilePlay->SetLabel(fPlayerState == kPlaying ? "Pause" : "Play");
-    fCover->SetTrack(art, title.IsEmpty() ? BString("Nothing playing") : title, artist);
-    fProgress->SetEnabled(player.DurationMs() > 0);
+    fMobileTransport->SetSegmentGlyph(1, fPlayerState == kPlaying ? mk::B_GLYPH_PAUSE : mk::B_GLYPH_PLAY);
+    if (fPlayerState == kStopped)
+        fMobileDisplay->SetText("", "", "");
+    else
+        fMobileDisplay->SetText(title.String(), artist.String(), album.String());
+    fNowPlayingArt = fPlayerState == kStopped ? ArtRequest() : art;
+    UpdateMobileArtwork();
+    fCover->SetTrack(fNowPlayingArt);
     fToolbar->SetTrackInfo(title, artist, album);
     fToolbar->SetArtwork(art);
     fToolbar->SetQuality(QualityFor(fNowPlayingTrack));
@@ -793,12 +1069,39 @@ void MainWindow::MessageReceived(BMessage* message)
     Player& player = App()->GetPlayer();
     Library& library = App()->GetLibrary();
     switch (message->what) {
-        case 'mNow':
-            ShowPlayerPage(fNowPlayingPage->IsHidden(fNowPlayingPage));
+        case kMsgMobileCover:
+            ShowPlayerPage(!PlayerPageShown());
             break;
-        case 'mSek':
-            player.Seek((int64_t)(fProgress->Position() * (double)player.DurationMs()));
+        case kMsgMobileSeek:
+            player.Seek((int64_t)(message->GetFloat("fraction", 0) * (double)player.DurationMs()));
             break;
+        case kMsgMobileVolume: {
+            float volume = fMobileVolume->Value() / 1000.0f;
+            player.SetVolume(volume);
+            fToolbar->SetVolume(volume);
+            break;
+        }
+        case kMsgMobileTab: {
+            int32 index = message->GetInt32("index", -1);
+            if (index < 0 || index >= kMobileTabCount)
+                break;
+            // a tab chosen again goes back to its first page
+            SelectSource(kMobileTabs[index].source, 0);
+            break;
+        }
+        case kMsgMobileBack:
+            SelectSource(fMobileHome, 0);
+            break;
+        case kMsgMobileSearch: {
+            std::string text = fMobileSearch->Text();
+            if (text != fSearch) {
+                fSearch = text;
+                fToolbar->SearchField()->SetText(text.c_str());
+                ClearDrillDown();
+                ReloadContent();
+            }
+            break;
+        }
         case BMobileKit::B_MOBILE_VIEW_CHANGED:
             SetMobile(message->GetBool("mobile", false));
             break;
@@ -806,6 +1109,7 @@ void MainWindow::MessageReceived(BMessage* message)
             // the system switched between light and dark: every view paints from the palette
             // that goes with the new colours
             theme::InvalidateAll(this);
+            fFrame->ColorsChanged();
             BWindow::MessageReceived(message);
             break;
         case kMsgPlayPause:
@@ -844,18 +1148,23 @@ void MainWindow::MessageReceived(BMessage* message)
         }
         case kMsgVolumeChanged: {
             float volume = 0.8f;
-            if (message->FindFloat("volume", &volume) == B_OK)
+            if (message->FindFloat("volume", &volume) == B_OK) {
                 player.SetVolume(volume);
+                if (!fMobileVolume->IsTracking())
+                    fMobileVolume->SetValue((int32)(volume * 1000));
+            }
             break;
         }
         case kMsgToggleShuffle:
             player.SetShuffle(!player.Shuffle());
             fStatus->SetShuffle(player.Shuffle());
+            fMobileDisplay->SetShuffle(player.Shuffle());
             break;
         case kMsgToggleRepeat: {
             int next = ((int)player.Repeat() + 1) % 3;
             player.SetRepeat((RepeatMode)next);
             fStatus->SetRepeat(next);
+            fMobileDisplay->SetRepeat(next);
             break;
         }
         case kMsgViewMode: {
@@ -871,13 +1180,13 @@ void MainWindow::MessageReceived(BMessage* message)
             std::string text = fToolbar->SearchField()->Text();
             if (text != fSearch) {
                 fSearch = text;
+                fMobileSearch->SetText(text.c_str());
                 ClearDrillDown();
                 ReloadContent();
             }
             break;
         }
         case kMsgSourceSelected: {
-            if (fMobile) ShowPlayerPage(false);
             const char* source = nullptr;
             int64 playlistId = 0;
             bool play = false;
@@ -1065,6 +1374,7 @@ void MainWindow::MessageReceived(BMessage* message)
         case kMsgPlayerStateChanged:
             UpdateNowPlaying();
             fToolbar->SetProgress(player.PositionMs(), player.DurationMs());
+            fMobileDisplay->SetProgress(player.PositionMs() * 1000, player.DurationMs() * 1000);
             break;
         case kMsgPlayerProgress: {
             int64 position = 0, duration = 0, track = 0;
@@ -1073,12 +1383,7 @@ void MainWindow::MessageReceived(BMessage* message)
             message->FindInt64("track", &track);
             if (track != fNowPlayingTrack || player.State() != fPlayerState)
                 UpdateNowPlaying();
-            if (fMobile && !fNowPlayingPage->IsHidden() && duration > 0) {
-                BPoint point;
-                uint32 buttons;
-                fProgress->GetMouse(&point, &buttons, false);
-                if (buttons == 0) fProgress->SetPosition((float)((double)position / duration));
-            }
+            fMobileDisplay->SetProgress(position * 1000, duration * 1000);
             fToolbar->SetProgress(position, duration);
             break;
         }
@@ -1133,6 +1438,7 @@ void MainWindow::MessageReceived(BMessage* message)
             break;
         case kMsgArtReady:
             fCover->Invalidate();
+            UpdateMobileArtwork();
             fToolbar->ArtworkChanged();
             fTrackList->Refresh();
             fGrid->Refresh();

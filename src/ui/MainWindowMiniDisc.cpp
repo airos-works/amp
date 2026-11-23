@@ -83,6 +83,7 @@ void MainWindow::MiniDiscChanged()
     bool locked = state.known && state.disc.present && state.disc.writeProtected;
     fSidebar->SetMiniDisc(state.connected, label, state.busy, state.busy ? std::max(0.0f, fMDFraction) : -1, locked);
     fMiniDiscView->SetState(state);
+    UpdateMobileTabs();
     if (fMDRetryPending && !state.busy) {
         // the recorder is back after a failed write: check with the user before going on, the
         // battery or the disc may have been changed meanwhile
