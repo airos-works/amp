@@ -1,6 +1,7 @@
 #include "ToolbarView.h"
 #include "App.h"
 #include "Icons.h"
+#include "OutputPicker.h"
 #include "Theme.h"
 #include "core/Model.h"
 #include <Bitmap.h>
@@ -20,11 +21,14 @@ namespace amp {
 
 namespace {
 const uint32 kMsgPulse = 'tbpl';
+const uint32 kMsgSpin = 'tbsp';      // the output button's spinner turns
 // the left end: transport buttons, then the volume slider between its two speakers
 const float kVolumeGap = 32;         // right edge of Next to the slider (the small speaker sits between)
 const float kSliderWidth = 90;       // preferred; narrower windows shrink it down to kSliderMinWidth
 const float kSliderMinWidth = 56;
 const float kSpeakerRoom = 26;       // the loud speaker right of the slider
+const float kOutputWidth = 30;       // the output button, right of the loud speaker
+const float kOutputRoom = kOutputWidth + 12;
 const float kLcdMinWidth = 220;
 const float kLcdComfortWidth = 300;  // below this the slider gives up width first
 const float kLcdMaxWidth = 560;
@@ -32,7 +36,7 @@ const float kGap = 24;               // between the display, the view buttons an
 const float kSearchMinWidth = 120;
 const float kViewWidth = 96;
 // the narrowest toolbar that still has room for all of it
-const float kMinWidth = 126 + kVolumeGap + kSliderMinWidth + kSpeakerRoom + 16 + kLcdMinWidth + kGap + kViewWidth
+const float kMinWidth = 126 + kVolumeGap + kSliderMinWidth + kSpeakerRoom + kOutputRoom + 16 + kLcdMinWidth + kGap + kViewWidth
     + kGap + kSearchMinWidth + 14;
 }
 
@@ -51,12 +55,15 @@ ToolbarView::ToolbarView()
 ToolbarView::~ToolbarView()
 {
     delete fPulse;
+    delete fSpin;
 }
 
 void ToolbarView::DetachedFromWindow()
 {
     delete fPulse;
     fPulse = nullptr;
+    delete fSpin;
+    fSpin = nullptr;
     BView::DetachedFromWindow();
 }
 
@@ -175,6 +182,35 @@ void ToolbarView::UpdatePulse()
 
 void ToolbarView::MessageReceived(BMessage* message)
 {
+    if (message->what == B_MOUSE_WHEEL_CHANGED) {
+        // over the volume: a wheel turns it, and so does a finger dragging along it (a touch
+        // screen sends its drags as scrolling, in pixels)
+        BPoint where;
+        uint32 buttons;
+        GetMouse(&where, &buttons, false);
+        if (!fVolumeRect.InsetByCopy(-10, -8).Contains(where))
+            return;
+        float pixelsX = 0, pixelsY = 0;
+        float volume = fVolume;
+        if (message->FindFloat("be:wheel_pixel_delta_x", &pixelsX) == B_OK
+            && message->FindFloat("be:wheel_pixel_delta_y", &pixelsY) == B_OK)
+            volume -= pixelsX / std::max(1.0f, fVolumeRect.Width());
+        else
+            volume -= 0.05f * message->GetFloat("be:wheel_delta_y", 0);
+        volume = std::min(1.0f, std::max(0.0f, volume));
+        if (volume != fVolume) {
+            SetVolume(volume);
+            BMessage changed(kMsgVolumeChanged);
+            changed.AddFloat("volume", volume);
+            Window()->PostMessage(&changed);
+        }
+        return;
+    }
+    if (message->what == kMsgSpin) {
+        fSpinPhase = (fSpinPhase + 1) % 12;
+        Invalidate(fOutputRect.InsetByCopy(-2, -2));
+        return;
+    }
     if (message->what == kMsgPulse) {
         fStripePhase = fmodf(fStripePhase + 1.0f, 12.0f);
         Invalidate(fProgressRect.InsetByCopy(-2, -2));
@@ -260,6 +296,16 @@ void ToolbarView::DrawActivity(const Activity& activity, BRect r)
         case kActivityMiniDisc:
             DrawMiniDisc(this, fArtRect.InsetByCopy(2, 2), Rgb(62, 84, 122), Rgb(176, 182, 190), true);
             break;
+        case kActivitySonos: {
+            BRect tile = fArtRect.InsetByCopy(3, 3);
+            SetHighColor(colors.lcdInset);
+            FillRoundRect(tile, 5, 5);
+            SetHighColor(Blend(colors.lcdBorder, colors.lcdBottom, 0.3f));
+            StrokeRoundRect(tile, 5, 5);
+            output::DrawSpeaker(this, tile.InsetByCopy(8, 6), activity.failed ? colors.lcdWarning
+                : (activity.done ? output::ActiveColor() : colors.lcdSecondary));
+            break;
+        }
         case kActivityScan: {
             BRect tile = fArtRect.InsetByCopy(3, 3);
             SetHighColor(colors.lcdInset);
@@ -352,12 +398,14 @@ void ToolbarView::Layout()
     // gives up width when the display would otherwise get cramped
     float sliderLeft = fNextRect.right + kVolumeGap;
     float lcdRight = fViewRect.left - kGap;
-    float room = lcdRight - (sliderLeft + kSliderWidth + kSpeakerRoom + 16);
+    float room = lcdRight - (sliderLeft + kSliderWidth + kSpeakerRoom + kOutputRoom + 16);
     float slider = kSliderWidth;
     if (room < kLcdComfortWidth)
         slider = std::max(kSliderMinWidth, kSliderWidth - (kLcdComfortWidth - room));
     fVolumeRect = BRect(sliderLeft, cy - 8, sliderLeft + slider, cy + 8);
-    float lcdLeft = fVolumeRect.right + kSpeakerRoom + 16;
+    float outputLeft = fVolumeRect.right + kSpeakerRoom + 10;
+    fOutputRect = BRect(outputLeft, cy - 11, outputLeft + kOutputWidth, cy + 11);
+    float lcdLeft = fOutputRect.right + 16;
     float lcdWidth = std::max(kLcdMinWidth, std::min(kLcdMaxWidth, lcdRight - lcdLeft));
     float lcdCenter = floorf((lcdLeft + lcdRight) / 2);
     if (lcdRight - lcdLeft < kLcdMinWidth)
@@ -414,6 +462,43 @@ void ToolbarView::SetVolume(float volume)
 {
     fVolume = volume;
     Invalidate(fVolumeRect.InsetByCopy(-20, -6));
+}
+
+void ToolbarView::SetOutput(OutputState state)
+{
+    if (state == fOutputState)
+        return;
+    fOutputState = state;
+    if (state == kOutputConnecting && !fSpin && Window()) {
+        BMessage spin(kMsgSpin);
+        fSpin = new BMessageRunner(BMessenger(this), &spin, output::kSpinnerFrame);
+    } else if (state != kOutputConnecting) {
+        delete fSpin;
+        fSpin = nullptr;
+    }
+    Invalidate(fOutputRect.InsetByCopy(-2, -2));
+}
+
+void ToolbarView::DrawOutputButton()
+{
+    // a small button like iTunes' AirPlay one: a screen with a triangle, blue while a
+    // speaker plays; a spinner while one connects
+    BRect r = fOutputRect;
+    const theme::Palette& colors = theme::Colors();
+    bool pressed = fTracking && fPressed == kOutput;
+    SetHighColor(colors.buttonShadow);
+    SetDrawingMode(B_OP_ALPHA);
+    FillRoundRect(r.OffsetByCopy(0, 1), 4, 4);
+    SetDrawingMode(B_OP_COPY);
+    FillRoundGradient(this, r, 4, pressed ? colors.buttonPressedTop : colors.buttonTop,
+        pressed ? colors.buttonPressedBottom : colors.buttonBottom);
+    SetHighColor(colors.buttonBorder);
+    StrokeRoundRect(r, 4, 4);
+    BRect glyph(r.left + 7, r.top + 3, r.right - 7, r.bottom - 3);
+    if (fOutputState == kOutputConnecting)
+        output::DrawSpinner(this, glyph.InsetByCopy(1, 1), fSpinPhase, colors.buttonGlyph);
+    else
+        output::DrawGlyph(this, glyph, fOutputState == kOutputRemote ? output::ActiveColor() : colors.buttonGlyph);
 }
 
 void ToolbarView::SetViewMode(int mode)
@@ -664,6 +749,7 @@ void ToolbarView::Draw(BRect updateRect)
     DrawRoundButton(fPlayRect, kPlay);
     DrawRoundButton(fNextRect, kNext);
     DrawVolume();
+    DrawOutputButton();
     DrawLcd();
     DrawViewButtons();
 }
@@ -678,6 +764,8 @@ ToolbarView::Hot ToolbarView::HitTest(BPoint where) const
         return kNext;
     if (fVolumeRect.InsetByCopy(-8, -6).Contains(where))
         return kVolume;
+    if (fOutputRect.InsetByCopy(-2, -3).Contains(where))
+        return kOutput;
     int shown = ShownIndex();
     std::vector<const Activity*> pages = Pages();
     if (fLcdRect.Contains(where) && pages.size() > 1) {
@@ -727,6 +815,11 @@ void ToolbarView::MouseDown(BPoint where)
     } else if (fPressed == kProgress && fDuration > 0) {
         float fraction = std::min(1.0f, std::max(0.0f, (where.x - fProgressRect.left - 5) / (fProgressRect.Width() - 10)));
         fPosition = (int64_t)(fraction * fDuration);
+    } else if (fPressed == kOutput) {
+        // the list opens on the press, as a menu does
+        BMessage message(kMsgShowOutputs);
+        message.AddRect("where", ConvertToScreen(fOutputRect));
+        Window()->PostMessage(&message);
     }
     Invalidate();
 }

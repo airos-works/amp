@@ -31,6 +31,7 @@ enum Icon {
     kLock,
     kFolder,
     kChevronRight,
+    kDesktop,
     kIconCount      // the number of glyphs, not one itself
 };
 

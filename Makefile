@@ -14,7 +14,7 @@ PLAYER_OBJ = $(PLAYER:%.cpp=$(BUILD)/%.o)
 UI_OBJ = $(UI:%.cpp=$(BUILD)/%.o)
 CORE_LIBS = -lcurl -lsqlite3 -ltag -lnetwork -lpthread
 LIBS = -lbe -lmedia -ldevice -ltranslation -ltracker -llocalestub -lbluetooth $(CORE_LIBS)
-.PHONY: all core player package clean icon check mdtool scantool labeltool
+.PHONY: all core player package clean icon check mdtool scantool labeltool sonostool
 # The Quick Look add-on (src/quicklook): the local decoder and the output built again as
 # position independent code for air/OS's quick_look_server. Needs the Quick Look headers and
 # libquicklook; an SDK without them leaves it out. QUICKLOOK=1 forces it, with
@@ -64,6 +64,10 @@ $(BUILD)/mdtool: $(CORE_OBJ) $(BUILD)/src/player/NetMDUsb.o $(BUILD)/src/player/
 labeltool: $(BUILD)/labeltool
 $(BUILD)/labeltool: $(CORE_OBJ) $(BUILD)/src/player/Rfcomm.o $(BUILD)/src/player/LabelPrinter.o $(BUILD)/src/ui/LabelRenderer.o $(BUILD)/tools/labeltool.o
 	$(CXX) -o $@ $^ -lbe -ltranslation -lbluetooth $(CORE_LIBS)
+# Sonos without the application: list the rooms, play a file on one, set its volume
+sonostool: $(BUILD)/sonostool
+$(BUILD)/sonostool: $(CORE_OBJ) $(BUILD)/tools/sonostool.o
+	$(CXX) -o $@ $^ $(CORE_LIBS)
 # times the library scanner on real folders, with a scratch library
 scantool: $(BUILD)/scantool
 $(BUILD)/scantool: $(CORE_OBJ) $(BUILD)/tools/scantool.o
@@ -75,5 +79,5 @@ package: all
 	bash tools/package-haiku.sh
 clean:
 	rm -rf $(BUILD)
--include $(CORE_OBJ:.o=.d) $(PLAYER_OBJ:.o=.d) $(UI_OBJ:.o=.d) $(BUILD)/tests/CoreTests.d $(BUILD)/tools/mdtool.d $(BUILD)/tools/scantool.d $(BUILD)/tools/labeltool.d
+-include $(CORE_OBJ:.o=.d) $(PLAYER_OBJ:.o=.d) $(UI_OBJ:.o=.d) $(BUILD)/tests/CoreTests.d $(BUILD)/tools/mdtool.d $(BUILD)/tools/scantool.d $(BUILD)/tools/labeltool.d $(BUILD)/tools/sonostool.d
 player: $(PLAYER_OBJ)

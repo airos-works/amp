@@ -1,6 +1,9 @@
 // Unit tests for Amp's portable core. Build and run with `make check` (on Haiku) or compile
 // this file with src/core on any system with a C++17 compiler.
 #include "core/ArtistLinks.h"
+#include "core/Http.h"
+#include "core/MediaServer.h"
+#include "core/Sonos.h"
 #include "core/Des.h"
 #include "core/ImageCache.h"
 #include "core/Library.h"
@@ -754,6 +757,92 @@ void TestNiimbot()
     CHECK(blank[0] == 255 && blank[255] == 255);
 }
 
+void TestSonos()
+{
+    // a household as GetZoneGroupState describes it: a room with a sub and a surround
+    // (satellites), a grouped pair, a hidden member and a bridge
+    std::string state =
+        "<ZoneGroupState><ZoneGroups>"
+        "<ZoneGroup Coordinator=\"RINCON_A\" ID=\"RINCON_A:1\">"
+        "<ZoneGroupMember UUID=\"RINCON_A\" Location=\"http://10.0.0.5:1400/xml/device_description.xml\" "
+        "ZoneName=\"Lounge &amp; Bar\" Invisible=\"0\">"
+        "<Satellite UUID=\"RINCON_SUB\" Location=\"http://10.0.0.6:1400/xml/device_description.xml\" "
+        "ZoneName=\"Sub\" Invisible=\"1\"/>"
+        "</ZoneGroupMember></ZoneGroup>"
+        "<ZoneGroup Coordinator=\"RINCON_K\" ID=\"RINCON_K:2\">"
+        "<ZoneGroupMember UUID=\"RINCON_D\" Location=\"http://10.0.0.8:1401/xml/device_description.xml\" ZoneName=\"Dining\"/>"
+        "<ZoneGroupMember UUID=\"RINCON_K\" Location=\"http://10.0.0.7:1400/xml/device_description.xml\" ZoneName=\"Kitchen\"/>"
+        "<ZoneGroupMember UUID=\"RINCON_H\" Location=\"http://10.0.0.9:1400/xml/device_description.xml\" "
+        "ZoneName=\"Hidden\" Invisible=\"1\"/>"
+        "</ZoneGroup>"
+        "<ZoneGroup Coordinator=\"RINCON_B\" ID=\"RINCON_B:3\">"
+        "<ZoneGroupMember UUID=\"RINCON_B\" Location=\"http://10.0.0.10:1400/xml/device_description.xml\" "
+        "ZoneName=\"BRIDGE\" IsZoneBridge=\"1\"/></ZoneGroup>"
+        "</ZoneGroups></ZoneGroupState>";
+    std::vector<SonosDevice> rooms = sonos::ParseZoneGroupState(state);
+    CHECK(rooms.size() == 3);
+    if (rooms.size() == 3) {
+        CHECK(rooms[0].name == "Dining" && rooms[0].host == "10.0.0.8" && rooms[0].port == 1401);
+        // a grouped room plays through its coordinator
+        CHECK(rooms[0].coordinatorUuid == "RINCON_K" && rooms[0].coordinatorHost == "10.0.0.7");
+        CHECK(rooms[1].name == "Kitchen" && rooms[1].coordinatorHost == "10.0.0.7");
+        CHECK(rooms[2].name == "Lounge & Bar" && rooms[2].uuid == "RINCON_A" && rooms[2].coordinatorUuid == "RINCON_A");
+    }
+    // the answer wraps the document escaped once, with namespace prefixes on the outside
+    std::string answer = "<s:Envelope><s:Body><u:GetZoneGroupStateResponse><ZoneGroupState>&lt;ZoneGroupState"
+        "&gt;&lt;/ZoneGroupState&gt;</ZoneGroupState></u:GetZoneGroupStateResponse></s:Body></s:Envelope>";
+    CHECK(sonos::TagText(answer, "ZoneGroupState") == "<ZoneGroupState></ZoneGroupState>");
+    CHECK(sonos::TagText("<a><RelTime>0:01:02</RelTime></a>", "RelTime") == "0:01:02");
+    CHECK(sonos::TagText("<u:CurrentVolume>17</u:CurrentVolume>", "CurrentVolume") == "17");
+    CHECK(sonos::TagText("<TrackURI/>", "TrackURI").empty());
+    CHECK(sonos::XmlUnescape("&#233;&#x263A;&amp;x") == "\xc3\xa9\xe2\x98\xba&x");
+    CHECK(sonos::ParseTime("1:02:03") == 3723000);
+    CHECK(sonos::ParseTime("NOT_IMPLEMENTED") == 0);
+    CHECK(sonos::FormatTime(3723999) == "1:02:03");
+    std::string didl = sonos::TrackMetadata("http://h:1/a b.flac", "audio/flac", "Rock & Roll", "<Band>", "", "",
+        125000);
+    CHECK(didl.find("<dc:title>Rock &amp; Roll</dc:title>") != std::string::npos);
+    CHECK(didl.find("<dc:creator>&lt;Band&gt;</dc:creator>") != std::string::npos);
+    CHECK(didl.find("protocolInfo=\"http-get:*:audio/flac:*\" duration=\"0:02:05\"") != std::string::npos);
+    CHECK(didl.find("upnp:album") == std::string::npos);
+}
+
+void TestMediaServer()
+{
+    char folder[] = "/tmp/amp-media-XXXXXX";
+    CHECK(mkdtemp(folder) != nullptr);
+    std::string path = std::string(folder) + "/song.flac";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << "fLaC0123456789";
+    }
+    CHECK(MediaServer::MimeTypeFor(path) == "audio/flac");
+    CHECK(MediaServer::MimeTypeFor("x.aac") == "audio/aac");
+    CHECK(MediaServer::MimeTypeFor("x.m4a") == "audio/mp4");
+    MediaServer server;
+    std::string error;
+    CHECK(server.Start(error));
+    std::string urlPath = server.Publish(path);
+    CHECK(server.Publish(path) == urlPath);
+    CHECK(urlPath.size() > 10 && urlPath.compare(urlPath.size() - 5, 5, ".flac") == 0);
+    std::string base = "http://127.0.0.1:" + std::to_string(server.Port());
+    HttpResponse whole = Http::Get(base + urlPath, {}, 5);
+    CHECK(whole.status == 200 && whole.body == "fLaC0123456789" && whole.contentType == "audio/flac");
+    HttpResponse range = Http::Get(base + urlPath, {"Range: bytes=4-7"}, 5);
+    CHECK(range.status == 206 && range.body == "0123");
+    HttpResponse tail = Http::Get(base + urlPath, {"Range: bytes=-3"}, 5);
+    CHECK(tail.status == 206 && tail.body == "789");
+    HttpResponse beyond = Http::Get(base + urlPath, {"Range: bytes=99-"}, 5);
+    CHECK(beyond.status == 416);
+    // nothing but what was published, and only under the token
+    HttpResponse other = Http::Get(base + "/amp/0/1.flac", {}, 5);
+    CHECK(other.status == 404);
+    server.Stop();
+    CHECK(!server.Running());
+    unlink(path.c_str());
+    rmdir(folder);
+}
+
 int main()
 {
     TestDes();
@@ -768,6 +857,8 @@ int main()
     TestScanner();
     TestArtistLinks();
     TestNiimbot();
+    TestSonos();
+    TestMediaServer();
     if (gFailures) {
         fprintf(stderr, "%d check(s) failed\n", gFailures);
         return 1;

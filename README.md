@@ -52,6 +52,12 @@ Install with `pkgman install <file>`, or copy the file into `/boot/system/packag
   (artwork, title, artist, total time) on a Niimbot B1 Bluetooth label printer, sized for the
   face of a MiniDisc, with a dot-exact preview. Amp finds the printer itself and talks to it
   over a small RFCOMM implementation of its own. See `docs/LABELS.md`.
+- Sonos: the button right of the volume (after iTunes' AirPlay button, in the touch view's
+  bar too) lists this computer and the Sonos rooms on the network. Choosing a room moves the
+  playing song there from where it was, with a spinner on the button while it connects; the
+  button turns blue, the volume slider sets the room's volume, and the list shows a check
+  mark on the room. Choosing the room (or This Computer) again plays on here from where the
+  room was. Amp serves the songs to the room itself. See `docs/SONOS.md`.
 - Quick Look: on air/OS, the space bar in Tracker plays a song in the Quick Look panel with
   Amp's own decoder and output, showing its artwork and tags with play/pause and a scrubber;
   a double click on the picture opens it in Amp. The add-on (`src/quicklook/`, shipped as
@@ -79,7 +85,8 @@ The development VM workflow (sync sources, build, screenshots) is described in
 tests in `docs/MINIDISC.md`. `make check` runs the core unit tests, `make mdtool` builds a
 command-line NetMD tool and `make scantool` one that times the library scanner on real
 folders (`build-haiku/scantool [-j workers] folder...`, with a scratch library). `make labeltool`
-renders, finds and prints disc labels without the application (`docs/LABELS.md`). `make icon`
+renders, finds and prints disc labels without the application (`docs/LABELS.md`), and
+`make sonostool` lists Sonos rooms and plays a file on one (`docs/SONOS.md`). `make icon`
 rebuilds the vector application icon and prepares the MiniDisc pictures in
 `resources/images` from `resources/branding/source` (Python 3 with Pillow). `tools/ws.sh` and `tools/ws-build.sh` do for the owner's
 workstation (a bare-metal Haiku machine with the test recorder) what `tools/haiku.sh` and

@@ -8,6 +8,7 @@
 #include "SettingsWindow.h"
 #include "Theme.h"
 #include "core/ArtistLinks.h"
+#include "player/SonosOutput.h"
 #include <Alert.h>
 #include <LayoutBuilder.h>
 #include <MenuBar.h>
@@ -30,6 +31,7 @@ const uint32 kMsgAbout = 'abou';
 const uint32 kMsgReloadNow = 'rlnw';
 const uint32 kMsgActivityExpired = 'acex';   // "id": a finished activity leaves the display
 const uint32 kMsgSelectNowPlaying = 'slnp';  // "track": selected once the shown list is laid out
+const uint32 kMsgCancelOutput = 'cnou';      // the display's ✕ while a speaker connects
 }
 
 namespace mk = BMobileKit;
@@ -68,6 +70,93 @@ void SetShown(BView* view, bool shown)
     }
 }
 }
+
+// The output button in the touch bar, right of the volume: a metal button with the
+// screen-and-triangle glyph, blue while a speaker plays, a spinner while one connects.
+class MobileOutputButton : public BView {
+public:
+    MobileOutputButton() : BView("output", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
+    {
+        SetViewColor(B_TRANSPARENT_COLOR);
+        float size = mk::TargetSize();
+        SetExplicitMinSize(BSize(ceilf(size * 0.9f), size));
+        SetExplicitMaxSize(BSize(ceilf(size * 0.9f), B_SIZE_UNSET));
+    }
+
+    ~MobileOutputButton() override { delete fSpin; }
+
+    void SetOutput(OutputState state)
+    {
+        if (state == fState)
+            return;
+        fState = state;
+        if (state == kOutputConnecting && !fSpin && Window()) {
+            BMessage spin('mSpn');
+            fSpin = new BMessageRunner(BMessenger(this), &spin, output::kSpinnerFrame);
+        } else if (state != kOutputConnecting) {
+            delete fSpin;
+            fSpin = nullptr;
+        }
+        Invalidate();
+    }
+
+    void MessageReceived(BMessage* message) override
+    {
+        if (message->what == 'mSpn') {
+            fPhase = (fPhase + 1) % 12;
+            Invalidate();
+            return;
+        }
+        BView::MessageReceived(message);
+    }
+
+    void Draw(BRect update) override
+    {
+        const mk::Skin& skin = mk::CurrentSkin();
+        mk::FillBarBehind(this, update);
+        BRect plate = Plate();
+        mk::DrawPlate(this, plate, ceilf(plate.Height() / 6), fPressed ? skin.pressedTop : skin.controlTop,
+            fPressed ? skin.pressedBottom : skin.controlBottom);
+        float side = floorf(plate.Height() * 0.56f);
+        BRect glyph(0, 0, side, side);
+        glyph.OffsetTo(floorf((plate.left + plate.right - side) / 2), floorf((plate.top + plate.bottom - side) / 2));
+        if (fState == kOutputConnecting) {
+            output::DrawSpinner(this, glyph, fPhase, skin.controlText);
+            return;
+        }
+        // cut into the metal like the kit's glyphs: the emboss one pixel below
+        output::DrawGlyph(this, glyph.OffsetByCopy(0, 1), skin.controlEmboss);
+        output::DrawGlyph(this, glyph, fState == kOutputRemote ? output::ActiveColor() : skin.controlText);
+    }
+
+    void MouseDown(BPoint where) override
+    {
+        fPressed = true;
+        Invalidate();
+        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+        BMessage message(kMsgShowOutputs);
+        message.AddRect("where", ConvertToScreen(Plate()));
+        Window()->PostMessage(&message);
+    }
+
+    void MouseUp(BPoint where) override
+    {
+        fPressed = false;
+        Invalidate();
+    }
+
+private:
+    BRect Plate() const
+    {
+        BRect plate = mk::VisibleRect(Bounds());
+        return plate.InsetByCopy(2, 0);
+    }
+
+    OutputState fState = kOutputLocal;
+    bool fPressed = false;
+    int fPhase = 0;
+    BMessageRunner* fSpin = nullptr;
+};
 
 // The playing song's cover on a black stage, standing on its reflection.
 class NowPlayingCover : public BView {
@@ -177,13 +266,24 @@ MainWindow::MainWindow(BRect frame)
     fMobileVolume = new mk::MetalSlider("volume", new BMessage(kMsgMobileVolume));
     fMobileVolume->SetModificationMessage(new BMessage(kMsgMobileVolume));
     fMobileVolume->SetValue((int32)(settings.volume * 1000));
-    // the transport and the volume are as wide as each other: the display stays centred
+    fMobileOutput = new MobileOutputButton();
+    // the transport on the left is as wide as the volume and the output button on the
+    // right: the display stays centred
     float side = fMobileTransport->MinSize().width;
-    fMobileVolume->SetExplicitMinSize(BSize(side, B_SIZE_UNSET));
-    fMobileVolume->SetExplicitMaxSize(BSize(side, B_SIZE_UNSET));
-    fMobileTop->GroupLayout()->AddView(fMobileTransport);
-    fMobileTop->GroupLayout()->AddView(fMobileDisplay, 1.0f);
-    fMobileTop->GroupLayout()->AddView(fMobileVolume);
+    BGroupLayout* trailing;
+    BLayoutBuilder::Group<>(fMobileTop->GroupLayout())
+        .Add(fMobileTransport)
+        .Add(fMobileDisplay, 1.0f)
+        .AddGroup(B_HORIZONTAL, 0)
+            .GetLayout(&trailing)
+            .Add(fMobileVolume)
+            .Add(fMobileOutput)
+        .End();
+    trailing->SetExplicitMinSize(BSize(side, B_SIZE_UNSET));
+    trailing->SetExplicitMaxSize(BSize(side, B_SIZE_UNSET));
+    // the slider gives the button its room (its own minimum would push past the bar's edge)
+    float slider = std::max(ceilf(mk::TargetSize() * 2), side - fMobileOutput->ExplicitMinSize().width);
+    fMobileVolume->SetExplicitMinSize(BSize(slider, B_SIZE_UNSET));
 
     fMobileBottom = new mk::MetalBar("mobile-bottom", mk::B_MOBILE_BOTTOM_BAR);
     fMobileBack = new mk::MetalButton("back", "Back", new BMessage(kMsgMobileBack), mk::B_BACK_BUTTON);
@@ -1056,6 +1156,137 @@ void MainWindow::UpdateNowPlaying()
     }
 }
 
+// #pragma mark - Sonos
+
+OutputChoices MainWindow::Choices() const
+{
+    OutputChoices choices;
+    choices.devices = fSonosDevices;
+    choices.searching = fSonosSearching;
+    choices.error = fSonosError;
+    choices.state = fOutputState;
+    choices.uuid = fOutputUuid;
+    // the room playing stays in the list while a new search has not found it (yet)
+    if (!fOutputUuid.IsEmpty()) {
+        bool listed = false;
+        for (const SonosDevice& device : fSonosDevices)
+            listed = listed || fOutputUuid == device.uuid.c_str();
+        if (!listed) {
+            SonosDevice playing;
+            playing.uuid = fOutputUuid.String();
+            playing.name = App()->GetPlayer().OutputName();
+            choices.devices.push_back(playing);
+        }
+    }
+    return choices;
+}
+
+void MainWindow::UpdateOutputPicker()
+{
+    if (!fOutputPicker.IsValid())
+        return;
+    BMessage update;
+    OutputPicker::Archive(Choices(), update);
+    fOutputPicker.SendMessage(&update);
+}
+
+void MainWindow::ShowOutputs(BRect where)
+{
+    if (fOutputPicker.IsValid()) {
+        // a second click on the button closes the list
+        fOutputPicker.SendMessage(B_QUIT_REQUESTED);
+        return;
+    }
+    // the click that took the list away (it closes when another window is clicked)
+    if (system_time() - fOutputPickerClosedAt < 300000)
+        return;
+    // the rooms are looked for afresh each time; the last ones found show meanwhile
+    if (!fSonosSearching) {
+        fSonosSearching = true;
+        SonosOutput::StartDiscovery(BMessenger(this));
+    }
+    OutputPicker* picker = new OutputPicker(BMessenger(this), where, fMobile, Choices());
+    fOutputPicker = BMessenger(picker);
+    picker->Show();
+}
+
+void MainWindow::ChooseOutput(const BString& uuid)
+{
+    Player& player = App()->GetPlayer();
+    // this computer, or the room in use (or connecting) chosen again: play here
+    if (uuid.IsEmpty() || uuid == player.OutputUuid().c_str()) {
+        player.DisconnectSonos();
+        return;
+    }
+    for (const SonosDevice& device : fSonosDevices)
+        if (uuid == device.uuid.c_str()) {
+            player.ConnectSonos(device);
+            return;
+        }
+}
+
+void MainWindow::OutputChanged(BMessage* message)
+{
+    OutputState previous = fOutputState;
+    fOutputState = (OutputState)message->GetInt32("state", kOutputLocal);
+    fOutputUuid = message->GetString("uuid", "");
+    BString name = message->GetString("name", "");
+    BString error = message->GetString("error", "");
+    float volume = message->GetFloat("volume", 0.8f);
+    fToolbar->SetOutput(fOutputState);
+    fMobileOutput->SetOutput(fOutputState);
+    // the slider shows the volume of where the sound goes
+    fToolbar->SetVolume(volume);
+    if (!fMobileVolume->IsTracking())
+        fMobileVolume->SetValue((int32)(volume * 1000));
+    UpdateOutputPicker();
+
+    // the display tells of the connection
+    ToolbarView::Activity activity;
+    activity.id = "sonos";
+    activity.kind = ToolbarView::kActivitySonos;
+    activity.detail = "Sonos";
+    switch (fOutputState) {
+        case kOutputConnecting:
+            activity.headline << "Connecting to " << name << "…";
+            activity.cancelCommand = kMsgCancelOutput;
+            fToolbar->SetActivity(activity);
+            break;
+        case kOutputRemote:
+            if (previous == kOutputRemote)
+                break; // the room's volume changed
+            activity.headline << "Playing on " << name;
+            activity.fraction = 1;
+            activity.done = true;
+            fToolbar->SetActivity(activity);
+            ExpireActivity("sonos", 4000000);
+            break;
+        case kOutputLocal:
+            if (error.IsEmpty()) {
+                fToolbar->RemoveActivity("sonos");
+                break;
+            }
+            activity.headline << (previous == kOutputConnecting ? "Cannot connect to " : "Lost the connection to ")
+                << name;
+            activity.detail = error;
+            activity.fraction = 1;
+            activity.done = true;
+            activity.failed = true;
+            fToolbar->SetActivity(activity);
+            ExpireActivity("sonos", 8000000);
+            if (fMobile) {
+                // the touch layout has no display pages: say it out loud
+                BString detail(error);
+                detail.Capitalize();
+                BString text(activity.headline);
+                text << ".\n\n" << detail << ".";
+                (new BAlert("Sonos", text.String(), "OK", nullptr, nullptr, B_WIDTH_AS_USUAL,
+                    B_WARNING_ALERT))->Go(nullptr);
+            }
+            break;
+    }
+}
+
 BString MainWindow::QualityFor(int64_t trackId)
 {
     Library& library = App()->GetLibrary();
@@ -1081,6 +1312,29 @@ void MainWindow::MessageReceived(BMessage* message)
             fToolbar->SetVolume(volume);
             break;
         }
+        // ---- Sonos
+        case kMsgShowOutputs:
+            ShowOutputs(message->GetRect("where", BRect()));
+            break;
+        case kMsgOutputPickerClosed:
+            fOutputPicker = BMessenger();
+            fOutputPickerClosedAt = system_time();
+            break;
+        case kMsgSonosDevices:
+            fSonosSearching = false;
+            fSonosDevices = SonosOutput::Devices(*message);
+            fSonosError = message->GetString("error", "");
+            UpdateOutputPicker();
+            break;
+        case kMsgChooseOutput:
+            ChooseOutput(message->GetString("uuid", ""));
+            break;
+        case kMsgCancelOutput:
+            player.DisconnectSonos();
+            break;
+        case kMsgOutputChanged:
+            OutputChanged(message);
+            break;
         case kMsgMobileTab: {
             int32 index = message->GetInt32("index", -1);
             if (index < 0 || index >= kMobileTabCount)

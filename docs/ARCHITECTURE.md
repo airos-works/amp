@@ -12,6 +12,8 @@ src/core     portable C++17 (no Haiku headers except in Scanner's TagLib use)
   ArtProviders       MusicBrainz/CAA, TheAudioDB, Discogs lookups
   ArtistLinks        an artist's MusicBrainz page: MBIDs seen in lookups or asked by name, cached
   Http               libcurl wrapper
+  Sonos              Sonos rooms: SSDP + zone topology discovery, AVTransport/RenderingControl calls
+  MediaServer        HTTP server (byte ranges) for the songs a speaker fetches, published files only
   Queue              play queue with shuffle/repeat
   NetMD              MiniDisc recorder protocol: commands, secure download, title/capacity planning
   NetMDSimulator     a recorder in software (tests, AMP_NETMD_SIMULATE)
@@ -22,7 +24,8 @@ src/core     portable C++17 (no Haiku headers except in Scanner's TagLib use)
 src/player   Haiku Media Kit
   AudioOutput        BSoundPlayer + ring buffer + volume
   LocalDecoder       BMediaFile/BMediaTrack decode thread
-  Player             controller: queue, decoder, progress
+  Player             controller: queue, decoder, progress; hands the song to and from a Sonos room
+  SonosOutput        one Sonos room: its UPnP calls on a worker thread, what it plays, its volume
   NetMDUsb           USB Kit transport and roster for NetMD recorders
   MiniDiscPcm        any local file -> 44.1 kHz 16-bit big-endian PCM for SP recording
   MiniDisc           MiniDiscManager: recorder state, write and erase jobs on one worker thread
@@ -40,6 +43,7 @@ src/ui       Haiku Interface Kit
   AlbumGridView      album cover grid
   ArtistsView        artist list + header (links to MusicBrainz) + grouped track list
   StatusBarView      +/shuffle/repeat, summary, Write to MiniDisc and Settings buttons
+  OutputPicker       the output button's glyph and spinner, and its list of this computer and the rooms
   Icons              Font Awesome glyphs: registers the bundled font, draws it centred;
                      the MiniDisc pictures from the resources, scaled and tinted
   SettingsWindow     Library / Artwork tabs
@@ -51,7 +55,8 @@ src/ui       Haiku Interface Kit
   MainWindowLabel    what goes on the label of an album, a playlist or the MiniDisc
 ```
 
-MiniDisc support is described in `MINIDISC.md`, label printing in `LABELS.md`.
+MiniDisc support is described in `MINIDISC.md`, label printing in `LABELS.md`, playback on
+Sonos speakers in `SONOS.md`.
 
 The column header is deliberately *not* part of the scrolled table: `TrackHeaderView` is a
 sibling of the `BScrollView`, so scrolling blits only the rows while the header is painted once

@@ -3,6 +3,7 @@
 #include "AlbumGridView.h"
 #include "ArtistsView.h"
 #include "MiniDiscView.h"
+#include "OutputPicker.h"
 #include "SidebarView.h"
 #include "StatusBarView.h"
 #include "ToolbarView.h"
@@ -32,6 +33,7 @@ class WoodFrame;
 namespace amp {
 
 class NowPlayingCover;
+class MobileOutputButton;
 
 class MainWindow : public BWindow {
 public:
@@ -83,6 +85,20 @@ private:
     void ClearMiniDiscStatus(bigtime_t after);
     // Print Label…: an album's, a playlist's or the MiniDisc's label (MainWindowLabel.cpp)
     void OpenLabelWindow(BMessage* request);
+    // Sonos: the output button's list, the rooms found and where the sound goes
+    void ShowOutputs(BRect where);
+    void ChooseOutput(const BString& uuid);
+    void OutputChanged(BMessage* message);
+    OutputChoices Choices() const;
+    void UpdateOutputPicker();
+    std::vector<SonosDevice> fSonosDevices;
+    bool fSonosSearching = false;
+    BString fSonosError;
+    BMessenger fOutputPicker;
+    bigtime_t fOutputPickerClosedAt = 0;
+    OutputState fOutputState = kOutputLocal;
+    BString fOutputUuid;
+    MobileOutputButton* fMobileOutput;
     // the library scan as a page of the display
     void LibraryScanProgress(const BString& text, bool done, int processed, int total);
     // takes a finished activity off the display after a while

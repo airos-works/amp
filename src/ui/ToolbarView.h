@@ -15,7 +15,7 @@ public:
     // library scan. With more than one thing to show, the display
     // gets pages (iTunes' status display): the arrow next to the artwork, the dots below it
     // or a click on the text turns to another.
-    enum ActivityKind { kActivityMiniDisc, kActivityScan };
+    enum ActivityKind { kActivityMiniDisc, kActivityScan, kActivitySonos };
     struct Activity {
         BString id;                    // "minidisc", "scan"
         ActivityKind kind = kActivityMiniDisc; // the picture on the left
@@ -46,6 +46,9 @@ public:
     void ArtworkChanged() { Invalidate(fLcdRect); }
     void SetProgress(int64_t positionMs, int64_t durationMs);
     void SetVolume(float volume);
+    // The output button beside the volume: plain for this computer, a spinner while a
+    // speaker connects, blue while one plays. A click sends kMsgShowOutputs.
+    void SetOutput(OutputState state);
     void SetViewMode(int mode);
     // The view buttons pick how songs are listed; the albums, artists and MiniDisc views have
     // a layout of their own and hide them.
@@ -63,7 +66,7 @@ public:
 
 private:
     enum Hot { kNone, kPrev, kPlay, kNext, kVolume, kProgress, kViewList, kViewGrouped, kViewGrid, kCancelActivity,
-        kPager, kPageDot, kPageText, kArtwork };
+        kPager, kPageDot, kPageText, kArtwork, kOutput };
     void DrawActivity(const Activity& activity, BRect lcd);
     void DrawPager(BRect lcd);
     BRect CancelRect() const;
@@ -85,6 +88,7 @@ private:
     void DrawLcd();
     void DrawProgress(BRect lcd);
     void DrawVolume();
+    void DrawOutputButton();
     void DrawViewButtons();
     Hot HitTest(BPoint where) const;
     float VolumeFromPoint(BPoint where) const;
@@ -100,6 +104,10 @@ private:
     bool fViewButtons = true;
     Hot fPressed = kNone;
     bool fTracking = false;
+    OutputState fOutputState = kOutputLocal;
+    int fSpinPhase = 0;
+    class BMessageRunner* fSpin = nullptr;
+    BRect fOutputRect;
     BRect fPrevRect, fPlayRect, fNextRect, fVolumeRect, fLcdRect, fProgressRect, fViewRect, fSearchRect;
     std::vector<Activity> fActivities;
     BString fShown;               // id of the activity on show; empty: the playing song

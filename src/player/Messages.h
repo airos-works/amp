@@ -10,6 +10,14 @@ enum {
     kMsgPlayerProgress = 'plpr',      // "position" int64 ms, "duration" int64 ms
     kMsgPlayerError = 'pler',         // "error" string
     kMsgTrackFinished = 'trfn',       // player -> app: "generation" int32
+    // Sonos (player/SonosOutput)
+    kMsgSonosEvent = 'snev',          // the room's worker -> app -> Player: "event" (SonosEvent), "session"
+    kMsgSonosDevices = 'sndv',        // discovery -> window: one "uuid", "name", "host", ... per room,
+                                      // "error" string when the search failed
+    kMsgOutputChanged = 'outc',       // player -> UI: where the sound goes changed: "state" int32
+                                      // (OutputState), "uuid", "name" string, "volume" float
+    kMsgShowOutputs = 'shou',         // the output button: "where" rect in screen coordinates
+    kMsgChooseOutput = 'chou',        // the picker: "uuid" string, empty for this computer
     // library / background -> UI
     kMsgLibraryChanged = 'lbch',
     kMsgScanProgress = 'scpr',        // "text" string, "done" bool; from the library scan also
@@ -70,5 +78,7 @@ enum {
 };
 
 enum PlayerState { kStopped = 0, kPlaying = 1, kPaused = 2 };
+// Where the sound goes: this computer, a Sonos room being connected, or that room.
+enum OutputState { kOutputLocal = 0, kOutputConnecting = 1, kOutputRemote = 2 };
 
 } // namespace amp

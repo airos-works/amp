@@ -56,6 +56,7 @@ const char* const kGlyphs[] = {
     "\xef\x80\xa3", // kLock        U+F023 lock
     "\xef\x81\xbc", // kFolder      U+F07C folder-open
     "\xef\x81\x94", // kChevronRight U+F054 chevron-right
+    "\xef\x8e\x90", // kDesktop U+F390 desktop
 };
 static_assert(sizeof(kGlyphs) / sizeof(kGlyphs[0]) == kIconCount, "one glyph per icon");
 

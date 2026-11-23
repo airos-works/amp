@@ -92,6 +92,21 @@ AmpApp::AmpApp()
     fPlayer->SetVolume(data.volume);
     fPlayer->SetShuffle(data.shuffle);
     fPlayer->SetRepeat((RepeatMode)data.repeat);
+    // a Sonos room shows the song's cover: the album's picture in the artwork cache
+    fPlayer->artPathFor = [this](int64_t trackId) -> std::string {
+        ArtKey key;
+        {
+            Library::Locker locker(*fLibrary);
+            const Track* track = fLibrary->TrackById(trackId);
+            if (!track)
+                return std::string();
+            const Album* album = fLibrary->AlbumById(track->albumId);
+            key = album ? album->art : track->art;
+            if (key.empty())
+                key = MakeAlbumArtKey(album ? album->artist : track->groupingArtist(), track->album);
+        }
+        return fImages->PathFor(key);
+    };
     fScanner.reset(new Scanner(*fLibrary, *fImages));
     fMiniDisc.reset(new MiniDiscManager());
     fScanner->onProgress = [this](const std::string& text, bool done) {
@@ -182,6 +197,9 @@ void AmpApp::MessageReceived(BMessage* message)
         }
         case kMsgMediaKey:
             HandleMediaKey(message);
+            break;
+        case kMsgSonosEvent:
+            fPlayer->HandleSonosEvent(message);
             break;
         default:
             BApplication::MessageReceived(message);

@@ -30,7 +30,8 @@ const char* CaBundle()
     return nullptr;
 }
 
-HttpResponse Perform(const std::string& url, const std::vector<std::string>& headers, int timeoutSeconds)
+HttpResponse Perform(const std::string& url, const std::vector<std::string>& headers, int timeoutSeconds,
+    const std::string* postBody = nullptr, int connectSeconds = 10)
 {
     HttpResponse response;
     CURL* curl = curl_easy_init();
@@ -45,7 +46,7 @@ HttpResponse Perform(const std::string& url, const std::vector<std::string>& hea
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)timeoutSeconds);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)connectSeconds);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_USERAGENT, Http::UserAgent().c_str());
@@ -55,6 +56,11 @@ HttpResponse Perform(const std::string& url, const std::vector<std::string>& hea
         curl_easy_setopt(curl, CURLOPT_CAINFO, ca);
     if (list)
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+    if (postBody) {
+        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postBody->data());
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)postBody->size());
+    }
     CURLcode code = curl_easy_perform(curl);
     if (code != CURLE_OK) {
         response.error = curl_easy_strerror(code);
@@ -82,6 +88,13 @@ HttpResponse Http::Get(const std::string& url, const std::vector<std::string>& h
 {
     GlobalInit();
     return Perform(url, headers, timeoutSeconds);
+}
+
+HttpResponse Http::Post(const std::string& url, const std::string& body,
+    const std::vector<std::string>& headers, int timeoutSeconds, int connectSeconds)
+{
+    GlobalInit();
+    return Perform(url, headers, timeoutSeconds, &body, connectSeconds);
 }
 
 std::string Http::UrlEncode(const std::string& text)
