@@ -158,6 +158,53 @@ private:
     BMessageRunner* fSpin = nullptr;
 };
 
+// The touch bar's display, with the desktop display's progress bar: a slim rounded groove,
+// the part played filled and a round playhead knob, in the touch LCD's colours.
+class MobileDisplay : public mk::NowPlayingDisplay {
+public:
+    MobileDisplay() : mk::NowPlayingDisplay("display") {}
+
+protected:
+    void DrawScrubber(BRect track, float fraction) override
+    {
+        const mk::Skin& skin = mk::CurrentSkin();
+        // the desktop's five-pixel groove and eleven-pixel knob, grown with the font
+        float size = be_plain_font->Size();
+        float thickness = std::max(5.0f, roundf(size * 0.42f));
+        float knobSize = std::max(11.0f, roundf(size * 0.92f));
+        float radius = floorf(knobSize / 2);
+        float cy = floorf((track.top + track.bottom) / 2);
+        BRect bar(track.left, cy - floorf(thickness / 2), track.right, cy - floorf(thickness / 2) + thickness - 1);
+        float ends = bar.Height() / 2; // round ends: no larger (app_server overshoots, #6)
+        rgb_color groove = mk::MixColors(skin.displayBottom, skin.trackTop, 0.45f);
+        SetHighColor(groove);
+        FillRoundRect(bar, ends, ends);
+        SetHighColor(mk::MixColors(groove, Rgb(0, 0, 0), 0.22f));
+        StrokeLine(BPoint(bar.left + 2, bar.top), BPoint(bar.right - 2, bar.top)); // inner shadow
+        float knobX = floorf(bar.left + radius + (bar.Width() - 2 * radius) * fraction);
+        if (knobX > bar.left + 2) {
+            BRect done(bar.left, bar.top, knobX, bar.bottom);
+            BGradientLinear fill(done.LeftTop(), done.LeftBottom());
+            fill.AddColor(mk::MixColors(skin.trackFill, Rgb(255, 255, 255), 0.12f), 0);
+            fill.AddColor(skin.trackFill, 255);
+            FillRoundRect(done, ends, ends, fill);
+        }
+        SetHighColor(mk::MixColors(skin.displayBorder, Rgb(0, 0, 0), 0.1f));
+        StrokeRoundRect(bar, ends, ends);
+        BRect knob(knobX - radius, cy - radius, knobX - radius + knobSize - 1, cy - radius + knobSize - 1);
+        SetDrawingMode(B_OP_ALPHA);
+        SetHighColor(0, 0, 0, 55);
+        FillEllipse(knob.OffsetByCopy(0, 1));
+        SetDrawingMode(B_OP_COPY);
+        BGradientLinear gradient(knob.LeftTop(), knob.LeftBottom());
+        gradient.AddColor(skin.knobTop, 0);
+        gradient.AddColor(skin.knobBottom, 255);
+        FillEllipse(knob, gradient);
+        SetHighColor(mk::MixColors(skin.displayText, skin.displayBorder, 0.45f));
+        StrokeEllipse(knob);
+    }
+};
+
 // The playing song's cover on a black stage, standing on its reflection.
 class NowPlayingCover : public BView {
 public:
@@ -167,9 +214,12 @@ public:
         SetViewColor(B_TRANSPARENT_COLOR);
     }
 
-    void SetTrack(const ArtRequest& art)
+    void SetTrack(const ArtRequest& art, const BString& title, const BString& artist, const BString& album)
     {
         fArt = art;
+        fTitle = title;
+        fArtist = artist;
+        fAlbum = album;
         Invalidate();
     }
 
@@ -180,12 +230,39 @@ public:
         FillRect(update);
         BRect area = Bounds();
         float margin = mk::TargetSize() * 0.6f;
-        // the cover and a quarter of its height of reflection fit between the margins
-        float side = std::max(0.0f, std::min(area.Width() - 2 * margin, (area.Height() - 2 * margin) / 1.25f));
+        // the artist, the song and the album above the cover, as the iPod's Now Playing has them
+        BFont titleFont(be_bold_font);
+        titleFont.SetSize(be_plain_font->Size() * 1.5f);
+        BFont lineFont(be_plain_font);
+        lineFont.SetSize(be_plain_font->Size() * 1.2f);
+        font_height titleHeight, lineHeight;
+        titleFont.GetHeight(&titleHeight);
+        lineFont.GetHeight(&lineHeight);
+        float titleLine = ceilf((titleHeight.ascent + titleHeight.descent) * 1.25f);
+        float otherLine = ceilf((lineHeight.ascent + lineHeight.descent) * 1.3f);
+        bool details = !fTitle.IsEmpty();
+        float text = details ? otherLine * 2 + titleLine + margin * 0.5f : 0;
+        // the details, the cover and a quarter of its height of reflection fit between the margins
+        float side = std::max(0.0f, std::min(area.Width() - 2 * margin, (area.Height() - 2 * margin - text) / 1.25f));
         if (side < 8)
             return;
         BRect cover(0, 0, side - 1, side - 1);
-        cover.OffsetTo(floorf((area.Width() - side) / 2), floorf((area.Height() - side * 1.25f) / 2));
+        cover.OffsetTo(floorf((area.Width() - side) / 2), floorf((area.Height() - side * 1.25f - text) / 2 + text));
+        if (details) {
+            float top = cover.top - text;
+            BRect lines(area.left + margin, top, area.right - margin, top + otherLine);
+            SetDrawingMode(B_OP_OVER);
+            SetLowColor(skin.stage);
+            rgb_color secondary = mk::MixColors(skin.stage, Rgb(255, 255, 255), 0.62f);
+            DrawLine(fArtist, lines, lineFont, lineHeight, secondary);
+            lines.OffsetBy(0, otherLine);
+            lines.bottom = lines.top + titleLine;
+            DrawLine(fTitle, lines, titleFont, titleHeight, Rgb(255, 255, 255));
+            lines.OffsetBy(0, titleLine);
+            lines.bottom = lines.top + otherLine;
+            DrawLine(fAlbum, lines, lineFont, lineHeight, secondary);
+            SetDrawingMode(B_OP_COPY);
+        }
         int size = std::min(1024, (int)side);
         BBitmap* bitmap = fArt.key.empty() ? nullptr : App()->Art().Get(fArt.key, size, &fArt);
         if (bitmap == nullptr) {
@@ -205,7 +282,21 @@ public:
     }
 
 private:
+    void DrawLine(const BString& text, BRect rect, const BFont& font, const font_height& height, rgb_color color)
+    {
+        if (text.IsEmpty())
+            return;
+        BString shown(text);
+        font.TruncateString(&shown, B_TRUNCATE_END, rect.Width());
+        SetFont(&font);
+        SetHighColor(color);
+        float width = font.StringWidth(shown.String());
+        DrawString(shown.String(), BPoint(floorf(rect.left + (rect.Width() - width) / 2),
+            floorf((rect.top + rect.bottom - height.ascent - height.descent) / 2 + height.ascent)));
+    }
+
     ArtRequest fArt;
+    BString fTitle, fArtist, fAlbum;
 };
 
 MainWindow::MainWindow(BRect frame)
@@ -255,7 +346,7 @@ MainWindow::MainWindow(BRect frame)
     fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_PREVIOUS, new BMessage(kMsgPrevious));
     fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_PLAY, new BMessage(kMsgPlayPause));
     fMobileTransport->AddSegment(nullptr, mk::B_GLYPH_NEXT, new BMessage(kMsgNext));
-    fMobileDisplay = new mk::NowPlayingDisplay("display");
+    fMobileDisplay = new MobileDisplay();
     fMobileDisplay->SetIdleText("Amp");
     fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_SEEK, new BMessage(kMsgMobileSeek));
     fMobileDisplay->SetMessage(mk::NowPlayingDisplay::B_DISPLAY_ARTWORK, new BMessage(kMsgMobileCover));
@@ -267,23 +358,33 @@ MainWindow::MainWindow(BRect frame)
     fMobileVolume->SetModificationMessage(new BMessage(kMsgMobileVolume));
     fMobileVolume->SetValue((int32)(settings.volume * 1000));
     fMobileOutput = new MobileOutputButton();
-    // the transport on the left is as wide as the volume and the output button on the
-    // right: the display stays centred
-    float side = fMobileTransport->MinSize().width;
+    // The transport on the left and the volume with the output button on the right take
+    // equal room, so the display stays centred. The layout shares the bar out by weight:
+    // each side gets two thirds of the display's width until the volume has the slider's
+    // full width (a short slider is hard to drag), and the display takes the rest.
+    float output = fMobileOutput->ExplicitMinSize().width;
+    float topSideMin = std::max(fMobileTransport->MinSize().width, ceilf(mk::TargetSize() * 3) + output);
+    float topSideMax = std::max(topSideMin, fMobileVolume->MaxSize().width + output);
+    BGroupLayout* transport;
     BGroupLayout* trailing;
     BLayoutBuilder::Group<>(fMobileTop->GroupLayout())
-        .Add(fMobileTransport)
-        .Add(fMobileDisplay, 1.0f)
+        .AddGroup(B_HORIZONTAL, 0)
+            .GetLayout(&transport)
+            .Add(fMobileTransport)
+            .AddGlue()
+        .End()
+        .Add(fMobileDisplay, 1.5f)
         .AddGroup(B_HORIZONTAL, 0)
             .GetLayout(&trailing)
             .Add(fMobileVolume)
             .Add(fMobileOutput)
         .End();
-    trailing->SetExplicitMinSize(BSize(side, B_SIZE_UNSET));
-    trailing->SetExplicitMaxSize(BSize(side, B_SIZE_UNSET));
+    for (BGroupLayout* side : {transport, trailing}) {
+        side->SetExplicitMinSize(BSize(topSideMin, B_SIZE_UNSET));
+        side->SetExplicitMaxSize(BSize(topSideMax, B_SIZE_UNSET));
+    }
     // the slider gives the button its room (its own minimum would push past the bar's edge)
-    float slider = std::max(ceilf(mk::TargetSize() * 2), side - fMobileOutput->ExplicitMinSize().width);
-    fMobileVolume->SetExplicitMinSize(BSize(slider, B_SIZE_UNSET));
+    fMobileVolume->SetExplicitMinSize(BSize(topSideMin - output, B_SIZE_UNSET));
 
     fMobileBottom = new mk::MetalBar("mobile-bottom", mk::B_MOBILE_BOTTOM_BAR);
     fMobileBack = new mk::MetalButton("back", "Back", new BMessage(kMsgMobileBack), mk::B_BACK_BUTTON);
@@ -1139,7 +1240,10 @@ void MainWindow::UpdateNowPlaying()
         fMobileDisplay->SetText(title.String(), artist.String(), album.String());
     fNowPlayingArt = fPlayerState == kStopped ? ArtRequest() : art;
     UpdateMobileArtwork();
-    fCover->SetTrack(fNowPlayingArt);
+    if (fPlayerState == kStopped)
+        fCover->SetTrack(fNowPlayingArt, "", "", "");
+    else
+        fCover->SetTrack(fNowPlayingArt, title, artist, album);
     fToolbar->SetTrackInfo(title, artist, album);
     fToolbar->SetArtwork(art);
     fToolbar->SetQuality(QualityFor(fNowPlayingTrack));
