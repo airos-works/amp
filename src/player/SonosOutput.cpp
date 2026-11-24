@@ -23,6 +23,8 @@ const int64_t kPollNearEnd = 300;        // ... in a song's last seconds, to mov
 const int64_t kVolumeInterval = 3000;    // ms between looks at the room's volume
 const int64_t kVolumeQuiet = 2500;       // after we set the volume, its echo is not news
 const int kFailuresToGiveUp = 3;         // unanswered looks in a row: the room is gone
+const int64_t kEndSlack = 5000;          // a stop this close to a song's end is its end
+const int64_t kWatchGap = 15000;         // no look for longer: we were not watching (asleep)
 
 } // namespace
 
@@ -211,9 +213,11 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
     bool loaded = false;            // a song of ours is on the room
     int32 generation = 0;
     std::string uri;                // ...at this address
-    bool seenPlaying = false;       // it has played: a stop now is the song's end
+    bool seenPlaying = false;       // it has played since it was sent
     bool wantPlaying = false;       // we asked it to play...
     int64_t askedAt = 0, askedFrom = 0; // ...then, from there
+    bool dropped = false;           // the room let go of the paused song: resuming finds the place
+    int64_t lastLook = 0;           // when the room was last seen
     int lastState = -1;             // the last PlayerState the room was seen in
     int failures = 0;
     int64_t nextPoll = 0, nextVolume = 0;
@@ -328,8 +332,10 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
                         generation = command.generation;
                         uri = url;
                         seenPlaying = false;
+                        dropped = false;
                         lastState = -1;
                         failures = 0;
+                        lastLook = NowMs();
                         s->SetPosition(command.ms, command.play);
                         nextPoll = NowMs() + kPollInterval;
                     }
@@ -337,7 +343,16 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
                     break;
                 }
                 case Command::kPlay:
-                    if (loaded && check(transport.Play(), "Play") && !wantPlaying) {
+                    if (!loaded)
+                        break;
+                    if (dropped) {
+                        // a stopped room starts the song over unless told where
+                        int64_t position = s->Position();
+                        if (position > 1000)
+                            check(transport.Seek(position), "Seek");
+                        dropped = false;
+                    }
+                    if (check(transport.Play(), "Play") && !wantPlaying) {
                         wantPlaying = true;
                         askedAt = NowMs();
                         askedFrom = s->Position();
@@ -387,6 +402,11 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
             continue;
         }
         failures = 0;
+        // a long silence since the last look (this computer slept): what the room did
+        // meanwhile was not seen, so a stop then cannot be taken for a song's end
+        int64_t lookedAt = NowMs();
+        bool watched = lookedAt - lastLook <= kWatchGap;
+        lastLook = lookedAt;
         // a command that came in meanwhile makes this look out of date
         if (serial != s->serial)
             continue;
@@ -404,14 +424,20 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
         if (info.state == "STOPPED") {
             int64_t waited = NowMs() - askedAt;
             int64_t songMs = s->durationMs;
-            if (seenPlaying || (wantPlaying && songMs > 0 && askedFrom + waited >= songMs + 1000)) {
+            // only a song followed while it played, right to its end, has ended: a stop
+            // anywhere else (from the Sonos app, or a paused song the room let go of hours
+            // later) must not start the next song by itself
+            bool atEnd = watched && wantPlaying && s->playing && songMs > 0
+                && s->Position() >= songMs - kEndSlack
+                && (seenPlaying || askedFrom + waited >= songMs + 1000);
+            if (atEnd) {
                 // the song ended (a short one can begin and end between two looks)
                 loaded = false;
                 s->SetPosition(s->Position(), false);
                 BMessage message(kMsgTrackFinished);
                 message.AddInt32("generation", generation);
                 s->control.SendMessage(&message);
-            } else if (wantPlaying && waited > 6000) {
+            } else if (watched && wantPlaying && !seenPlaying && waited > 6000) {
                 // asked to play, it never did: it could not fetch or read the song
                 loaded = false;
                 s->SetPosition(askedFrom, false);
@@ -421,12 +447,31 @@ void SonosOutput::Run(std::shared_ptr<Shared> s)
                 message.AddBool("ok", false);
                 message.AddString("error", "the speaker could not play it");
                 s->Post(kSonosLoaded, message);
-            } else
-                s->SetPosition(s->Position(), wantPlaying);
+            } else if (watched && wantPlaying && !seenPlaying) {
+                s->SetPosition(s->Position(), true);    // still starting
+            } else if (!wantPlaying) {
+                // paused here, and the room has let go of the song (or was sent it paused):
+                // it stays paused, and playing again picks up where it was
+                dropped = true;
+                s->SetPosition(s->Position(), false);
+            } else {
+                // stopped from elsewhere, or while we were not watching: stopped here too
+                loaded = false;
+                s->SetPosition(0, false);
+                BMessage message;
+                message.AddInt32("generation", generation);
+                message.AddInt32("state", kStopped);
+                s->Post(kSonosTransport, message);
+            }
             continue;
         }
         if (playing)
             seenPlaying = true;
+        // paused or resumed from the Sonos app: what the room does is what is wanted now
+        if (info.state == "PLAYING")
+            wantPlaying = true;
+        else if (info.state == "PAUSED_PLAYBACK")
+            wantPlaying = false;
         if (info.durationMs > 0)
             s->durationMs = info.durationMs;
         // the room reports whole seconds: keep the smoother running estimate when it agrees

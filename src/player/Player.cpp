@@ -484,11 +484,12 @@ void Player::HandleSonosEvent(BMessage* message)
         }
         case kSonosTransport: {
             // paused, resumed or taken over from the Sonos app; our own commands echo back
-            // a little late and are not news
-            if (message->GetInt32("generation", -1) != fGeneration
-                || system_time() - fRemoteCommandAt < 2000000)
+            // a little late and are not news (a stop never echoes one: the room has let go)
+            if (message->GetInt32("generation", -1) != fGeneration)
                 break;
             PlayerState state = (PlayerState)message->GetInt32("state", kStopped);
+            if (state != kStopped && system_time() - fRemoteCommandAt < 2000000)
+                break;
             if (fState != kStopped)
                 SetState(state);
             break;
