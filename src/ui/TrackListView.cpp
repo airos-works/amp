@@ -150,6 +150,8 @@ float TrackListView::RowHeight() const
 
 void TrackListView::SetMobile(bool mobile)
 {
+    fScroll.Reset();
+    fTouchRow = -1;
     fMobile = mobile;
     if (fHeaderView != nullptr) {
         if (mobile) fHeaderView->Hide();
@@ -525,7 +527,7 @@ void TrackListView::Draw(BRect updateRect)
         }
     } else {
         int first = std::max(0, (int)(updateRect.top / RowHeight()));
-        int last = std::min((int)fTracks.size() - 1, (int)(updateRect.bottom / RowHeight()) + 1);
+        int last = std::min((int)fTracks.size() - 1, (int)(updateRect.bottom / RowHeight()));
         for (int row = first; row <= last; row++)
             DrawRow(row, RowRect(row), fSelection.count(row) != 0, active);
     }
@@ -727,15 +729,12 @@ void TrackListView::MouseDown(BPoint where)
     }
     if (fMobile) {
         // nothing plays until the finger lifts: it may be the start of a drag
-        fTouching = true;
         fTouchRow = row;
-        fTouchScrolling = false;
-        fTouchStart = ConvertToScreen(where);
-        fTouchScroll = Bounds().top;
+        fScroll.Begin(this, ConvertToScreen(where).y);
         fSelection.clear();
         if (row >= 0)
             fSelection.insert(row);
-        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS | B_NO_POINTER_HISTORY);
         Invalidate();
         return;
     }
@@ -793,34 +792,17 @@ void TrackListView::MouseDown(BPoint where)
     PostSelectionChanged();
 }
 
-bool TrackListView::TouchMoved(BPoint where)
-{
-    if (!fMobile || !fTouching)
-        return false;
-    // the list follows the finger (screen coordinates: the view moves under it)
-    float distance = ConvertToScreen(where).y - fTouchStart.y;
-    if (!fTouchScrolling && fabs(distance) > BMobileKit::TargetSize() * 0.2f) {
-        fTouchScrolling = true;
-        fSelection.clear();
-        Invalidate();
-    }
-    if (fTouchScrolling) {
-        float max = std::max(0.0f, ContentHeight() - Bounds().Height());
-        float top = std::max(0.0f, std::min(max, fTouchScroll - distance));
-        if (top != Bounds().top)
-            ScrollTo(0, top);
-    }
-    return true;
-}
-
 void TrackListView::MouseUp(BPoint where)
 {
-    if (fMobile && fTouching) {
+    if (fMobile) {
         int row = fTouchRow;
-        bool tapped = !fTouchScrolling && row >= 0 && RowAt(where) == row;
-        fTouching = false;
+        bool tapped = fScroll.End(this, ConvertToScreen(where).y, BMobileKit::TargetSize() * 0.2f)
+            && row >= 0 && RowAt(where) == row;
+        if (!tapped && row >= 0) {
+            fSelection.clear();
+            Invalidate(RowRect(row));
+        }
         fTouchRow = -1;
-        fTouchScrolling = false;
         if (tapped)
             PlayRow(row);
         return;
@@ -847,8 +829,16 @@ void TrackListView::MouseUp(BPoint where)
 
 void TrackListView::MouseMoved(BPoint where, uint32 transit, const BMessage* drag)
 {
-    if (!drag && TouchMoved(where))
+    if (fMobile && !drag) {
+        if (Window()->CurrentMessage()->GetInt32("buttons", 0) != 0
+            && fScroll.Drag(this, ConvertToScreen(where).y, BMobileKit::TargetSize() * 0.2f)
+            && fTouchRow >= 0) {
+            fSelection.clear();
+            Invalidate(RowRect(fTouchRow));
+            fTouchRow = -1;
+        }
         return;
+    }
     if (fResizeColumn >= 0) {
         float width = std::max(30.0f, fResizeStartWidth + (where.x - fResizeStartX));
         fColumns[fResizeColumn].width = width;
@@ -904,6 +894,14 @@ void TrackListView::StartDrag(BPoint where)
 
 void TrackListView::MessageReceived(BMessage* message)
 {
+    if (fMobile && fScroll.Wheel(this, message)) {
+        if (fTouchRow >= 0) {
+            fSelection.clear();
+            Invalidate(RowRect(fTouchRow));
+            fTouchRow = -1;
+        }
+        return;
+    }
     if (message->WasDropped() && message->what == kMsgTrackDrag) {
         BPoint where = ConvertFromScreen(message->DropPoint());
         // an exact position only exists in the unfiltered list view; otherwise songs are appended

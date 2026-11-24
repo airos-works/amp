@@ -495,18 +495,25 @@ void DrawTruncated(BView* view, const char* text, BRect rect, alignment align, f
 {
     if (!text || !*text)
         return;
-    BString truncated = TruncateToWidth(view, text, rect.Width() - inset * 2);
+    float available = rect.Width() - inset * 2;
+    float width = view->StringWidth(text);
+    BString truncated;
+    if (width > available) {
+        truncated = TruncateToWidth(view, text, available);
+        text = truncated.String();
+        if (align != B_ALIGN_LEFT)
+            width = view->StringWidth(text);
+    }
     font_height fh;
     view->GetFontHeight(&fh);
     float y = rect.top + (rect.Height() - (fh.ascent + fh.descent)) / 2 + fh.ascent;
     float x = rect.left + inset;
-    float width = view->StringWidth(truncated.String());
     if (align == B_ALIGN_RIGHT)
         x = rect.right - inset - width;
     else if (align == B_ALIGN_CENTER)
         x = rect.left + (rect.Width() - width) / 2;
     view->SetDrawingMode(B_OP_OVER);
-    view->DrawString(truncated.String(), BPoint(x, y));
+    view->DrawString(text, BPoint(x, y));
 }
 
 } // namespace amp

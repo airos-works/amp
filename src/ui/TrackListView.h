@@ -1,6 +1,7 @@
 // The track table: plain rows or iTunes-style album groups with artwork, sorting, multi-selection,
 // keyboard navigation, drag & drop to playlists and reordering inside a playlist.
 #pragma once
+#include "MobileScroll.h"
 #include "core/Model.h"
 #include "player/Messages.h"
 #include <String.h>
@@ -36,7 +37,7 @@ public:
     void ClearSelection();
     const std::vector<int64_t>& Tracks() const { return fTracks; }
     int64_t PlaylistId() const { return fPlaylistId; }
-    void Refresh() { Invalidate(); }
+    void RefreshArtwork() { if (fMode == kGrouped) Invalidate(); }
     void SetEmptyText(const char* text) { fEmptyText = text; }
 
     void AttachedToWindow() override;
@@ -74,12 +75,8 @@ private:
     float RowHeight() const;
     bool fMobile = false;
     // a finger on the list: a tap plays the row, a drag scrolls
-    bool fTouching = false;
     int fTouchRow = -1;
-    bool fTouchScrolling = false;
-    BPoint fTouchStart;
-    float fTouchScroll = 0;
-    bool TouchMoved(BPoint where);
+    MobileScroll fScroll;
     void Relayout();
     void UpdateScrollBar();
     float ContentHeight() const;

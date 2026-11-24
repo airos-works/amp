@@ -9,6 +9,7 @@
 #include <PopUpMenu.h>
 #include <ScrollBar.h>
 #include <Window.h>
+#include <algorithm>
 #include <cmath>
 
 namespace amp {
@@ -49,6 +50,7 @@ void AlbumGridView::SetMobile(bool mobile)
 {
     if (mobile == fMobile)
         return;
+    fScroll.Reset();
     fMobile = mobile;
     fTouchCell = -1;
     Relayout();
@@ -72,6 +74,20 @@ void AlbumGridView::SetCells(std::vector<AlbumCell> cells)
     if (Bounds().top > MaxScroll())
         ScrollTo(0, MaxScroll());
     Invalidate();
+}
+
+void AlbumGridView::RefreshArtwork(const std::string& key)
+{
+    BRect visible = Bounds();
+    int firstRow = std::max(0, (int)((visible.top - Padding()) / CellHeight()));
+    int lastRow = (int)((visible.bottom - Padding()) / CellHeight());
+    int end = std::min((int)fAlbums.size(), (lastRow + 1) * fColumns);
+    for (int i = firstRow * fColumns; i < end; i++) {
+        const AlbumCell& cell = fAlbums[i];
+        if (cell.artKey == key || std::any_of(cell.mosaic.begin(), cell.mosaic.end(),
+                [&](const AlbumCell::Cover& cover) { return cover.key == key; }))
+            Invalidate(CellRect(i));
+    }
 }
 
 BMessage* AlbumGridView::ShowSongsMessage(const AlbumCell& cell) const
@@ -188,27 +204,36 @@ void AlbumGridView::DrawMosaic(const AlbumCell& cell, BRect art)
     }
 }
 
-void AlbumGridView::DrawMobileCell(const AlbumCell& cell, BRect rect, bool pressed)
+void AlbumGridView::DrawMobileCell(const AlbumCell& cell, BRect rect, BRect update, bool pressed)
 {
     const BMobileKit::Skin& skin = BMobileKit::CurrentSkin();
     float art = ArtSize();
     BRect cover(rect.left + floorf((rect.Width() - art) / 2), rect.top + Padding(),
         rect.left + floorf((rect.Width() - art) / 2) + art - 1, rect.top + Padding() + art - 1);
-    if (cell.mosaic.size() >= 4)
-        DrawMosaic(cell, cover);
-    else if (!cell.mosaic.empty()) {
+    // The native scroll blit usually exposes just a narrow strip.
+    BRect shadow = cover.InsetByCopy(-kArtShadowBlur, -kArtShadowBlur);
+    shadow.bottom += kArtShadowDrop;
+    bool drawCover = shadow.Intersects(update);
+    BBitmap* bitmap = nullptr;
+    if (cell.mosaic.size() >= 4) {
+        if (drawCover)
+            DrawMosaic(cell, cover);
+    } else if (!cell.mosaic.empty()) {
         // a tile that borrows an album's cover (an artist, a short playlist)
         const AlbumCell::Cover& from = cell.mosaic.front();
         ArtRequest request = App()->Art().RequestFor(from.key, from.artist, from.album, from.hint, false);
-        cover = DrawArtworkOnPage(this, App()->Art().Get(from.key, (int)art, &request), cover);
-    } else if (cell.playlistId != 0) {
-        cover = DrawArtworkOnPage(this, nullptr, cover); // an empty playlist
-    } else {
+        bitmap = App()->Art().Get(from.key, (int)art, &request);
+    } else if (cell.playlistId == 0) {
         ArtRequest request = App()->Art().RequestFor(cell.artKey, cell.artist, cell.name, cell.localHint, false);
-        BBitmap* bitmap = App()->Art().Get(cell.artKey, (int)art, &request);
-        cover = DrawArtworkOnPage(this, bitmap, cover);
+        bitmap = App()->Art().Get(cell.artKey, (int)art, &request);
     }
-    if (pressed) {
+    if (cell.mosaic.size() < 4) {
+        if (drawCover)
+            cover = DrawArtworkOnPage(this, bitmap, cover);
+        else
+            cover.bottom = ceilf(FittedRect(bitmap, cover).bottom);
+    }
+    if (pressed && drawCover) {
         // the tile darkens under the finger
         SetDrawingMode(B_OP_ALPHA);
         SetHighColor(0, 0, 0, 90);
@@ -220,6 +245,9 @@ void AlbumGridView::DrawMobileCell(const AlbumCell& cell, BRect rect, bool press
     float line = ceilf(height.ascent + height.descent + height.leading);
     BRect text(rect.left + 2, cover.bottom + Padding() * 0.6f, rect.right - 2,
         cover.bottom + Padding() * 0.6f + line);
+    BRect subtitle = text.OffsetByCopy(0, line);
+    if (update.bottom < text.top || update.top > subtitle.bottom)
+        return;
     BFont bold(be_bold_font);
     bold.SetSize(be_plain_font->Size());
     SetFont(&bold);
@@ -230,13 +258,14 @@ void AlbumGridView::DrawMobileCell(const AlbumCell& cell, BRect rect, bool press
     SetFont(&small);
     SetHighColor(skin.pageSecondary);
     const std::string& caption = cell.caption.empty() ? cell.artist : cell.caption;
-    DrawTruncated(this, caption.c_str(), text.OffsetByCopy(0, line), B_ALIGN_CENTER, 0);
+    DrawTruncated(this, caption.c_str(), subtitle, B_ALIGN_CENTER, 0);
 }
 
 void AlbumGridView::Draw(BRect updateRect)
 {
     if (fMobile) {
-        BMobileKit::DrawPage(this, Bounds(), updateRect);
+        // Keep the paper lighting attached to the page as app_server copies strips.
+        BMobileKit::DrawPage(this, Bounds().OffsetToCopy(B_ORIGIN), updateRect);
         if (fAlbums.empty()) {
             SetFont(be_bold_font);
             SetHighColor(BMobileKit::CurrentSkin().pageSecondary);
@@ -252,7 +281,7 @@ void AlbumGridView::Draw(BRect updateRect)
         for (size_t i = first; i < last; i++) {
             BRect cell = CellRect((int)i);
             if (cell.Intersects(updateRect))
-                DrawMobileCell(fAlbums[i], cell, (int)i == fTouchCell && !fTouchScrolling);
+                DrawMobileCell(fAlbums[i], cell, updateRect, (int)i == fTouchCell && fScroll.TapPending());
         }
         return;
     }
@@ -309,6 +338,18 @@ void AlbumGridView::Draw(BRect updateRect)
     }
 }
 
+void AlbumGridView::MessageReceived(BMessage* message)
+{
+    if (fMobile && fScroll.Wheel(this, message)) {
+        if (fTouchCell >= 0) {
+            Invalidate(CellRect(fTouchCell));
+            fTouchCell = -1;
+        }
+        return;
+    }
+    BView::MessageReceived(message);
+}
+
 void AlbumGridView::MouseDown(BPoint where)
 {
     MakeFocus(true);
@@ -319,10 +360,8 @@ void AlbumGridView::MouseDown(BPoint where)
     if (fMobile && !(buttons & B_SECONDARY_MOUSE_BUTTON)) {
         // nothing happens until the finger lifts: it may be the start of a drag
         fTouchCell = index;
-        fTouchScrolling = false;
-        fTouchStart = ConvertToScreen(where);
-        fTouchScroll = Bounds().top;
-        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+        fScroll.Begin(this, ConvertToScreen(where).y);
+        SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS | B_NO_POINTER_HISTORY);
         if (index >= 0)
             Invalidate(CellRect(index));
         return;
@@ -358,9 +397,9 @@ void AlbumGridView::MouseUp(BPoint where)
     if (!fMobile)
         return;
     int index = fTouchCell;
-    bool tapped = !fTouchScrolling && index >= 0 && CellAt(where) == index;
+    bool tapped = fScroll.End(this, ConvertToScreen(where).y, BMobileKit::TargetSize() * 0.2f)
+        && index >= 0 && CellAt(where) == index;
     fTouchCell = -1;
-    fTouchScrolling = false;
     if (index >= 0)
         Invalidate(CellRect(index));
     if (tapped)
@@ -374,18 +413,10 @@ void AlbumGridView::MouseMoved(BPoint where, uint32 transit, const BMessage* dra
         Window()->CurrentMessage()->FindInt32("buttons", &buttons);
         if (buttons == 0 || drag)
             return;
-        // the page follows the finger (screen coordinates: the view moves under it)
-        BPoint screen = ConvertToScreen(where);
-        float distance = screen.y - fTouchStart.y;
-        if (!fTouchScrolling && fabs(distance) > BMobileKit::TargetSize() * 0.2f) {
-            fTouchScrolling = true;
-            if (fTouchCell >= 0)
-                Invalidate(CellRect(fTouchCell));
-        }
-        if (fTouchScrolling) {
-            float top = std::max(0.0f, std::min(MaxScroll(), fTouchScroll - distance));
-            if (top != Bounds().top)
-                ScrollTo(0, top);
+        if (fScroll.Drag(this, ConvertToScreen(where).y, BMobileKit::TargetSize() * 0.2f)
+            && fTouchCell >= 0) {
+            Invalidate(CellRect(fTouchCell));
+            fTouchCell = -1;
         }
         return;
     }

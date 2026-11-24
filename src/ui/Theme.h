@@ -80,15 +80,17 @@ void DrawProgressPie(BView* view, BRect rect, float fraction, rgb_color color);
 void DrawBitmapFitted(BView* view, const BBitmap* bitmap, BRect rect);
 // Where DrawBitmapFitted puts the picture: `rect` itself without a bitmap.
 BRect FittedRect(const BBitmap* bitmap, BRect rect);
+constexpr float kArtShadowBlur = 8.0f;
+constexpr float kArtShadowDrop = 3.0f;
 // The shadow a sheet lying on `rect` throws: soft over `blur` pixels, falling `drop` pixels
 // below the sheet, `strength` (0-255) at its darkest. Drawn before the sheet itself.
-void DrawSoftShadow(BView* view, BRect rect, float blur = 8.0f, float drop = 3.0f, uint8 strength = 135);
+void DrawSoftShadow(BView* view, BRect rect, float blur = kArtShadowBlur, float drop = kArtShadowDrop, uint8 strength = 135);
 // A picture lying on the page (album covers, artist pictures): its soft shadow, the picture
 // fitted into `rect` and a hairline that holds a pale picture together. Without a bitmap a
 // placeholder takes its place: a person for an `artist`, a note otherwise. Returns where the
 // picture went.
 BRect DrawArtworkOnPage(BView* view, const BBitmap* bitmap, BRect rect, bool artist = false,
-    float blur = 8.0f, float drop = 3.0f);
+    float blur = kArtShadowBlur, float drop = kArtShadowDrop);
 BString TruncateToWidth(const BView* view, const char* text, float width);
 void DrawTruncated(BView* view, const char* text, BRect rect, alignment align = B_ALIGN_LEFT, float inset = 4.0f);
 rgb_color Blend(rgb_color a, rgb_color b, float amount);

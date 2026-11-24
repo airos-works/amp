@@ -1784,12 +1784,12 @@ void MainWindow::MessageReceived(BMessage* message)
             } else if (!fLibraryDirty) {
                 fLibraryDirty = true;
                 BMessage reload(kMsgReloadNow);
-                BMessenger(this).SendMessage(&reload); // handled below after a short delay
+                if (BMessageRunner::StartSending(BMessenger(this), &reload, 300000, 1) != B_OK)
+                    PostMessage(&reload);
             }
             break;
         case kMsgReloadNow:
             if (fLibraryDirty) {
-                snooze(300000);
                 ReloadSidebar();
                 ReloadContent();
             }
@@ -1798,9 +1798,12 @@ void MainWindow::MessageReceived(BMessage* message)
             fCover->Invalidate();
             UpdateMobileArtwork();
             fToolbar->ArtworkChanged();
-            fTrackList->Refresh();
-            fGrid->Refresh();
-            fArtists->Refresh();
+            if (!fTrackList->IsHidden())
+                fTrackList->RefreshArtwork();
+            if (!fGrid->IsHidden())
+                fGrid->RefreshArtwork(message->GetString("key", ""));
+            if (!fArtists->IsHidden())
+                fArtists->Refresh();
             break;
         case kMsgSelectionChanged:
             if (fSource == "artists")

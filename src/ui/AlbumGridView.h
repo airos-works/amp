@@ -1,5 +1,6 @@
 // Grid of album covers (the iTunes "grid" view).
 #pragma once
+#include "MobileScroll.h"
 #include <String.h>
 #include <View.h>
 #include <cstdint>
@@ -36,9 +37,10 @@ public:
     void SetCells(std::vector<AlbumCell> cells);
     // what the touch page says while it has no tiles
     void SetEmptyText(const char* text) { fEmptyText = text; }
-    void Refresh() { Invalidate(); }
+    void RefreshArtwork(const std::string& key);
 
     void Draw(BRect updateRect) override;
+    void MessageReceived(BMessage* message) override;
     void MouseDown(BPoint where) override;
     void MouseMoved(BPoint where, uint32 transit, const BMessage* drag) override;
     void MouseUp(BPoint where) override;
@@ -53,14 +55,12 @@ private:
     float CellHeight() const;
     float ArtSize() const;
     float Padding() const;
-    void DrawMobileCell(const AlbumCell& cell, BRect rect, bool pressed);
+    void DrawMobileCell(const AlbumCell& cell, BRect rect, BRect update, bool pressed);
     void DrawMosaic(const AlbumCell& cell, BRect art);
     void Open(int index);
     // a finger on the page: a tap opens the tile under it, a drag scrolls
     int fTouchCell = -1;
-    bool fTouchScrolling = false;
-    BPoint fTouchStart;
-    float fTouchScroll = 0;
+    MobileScroll fScroll;
     void Relayout();
     float ContentHeight() const;
     float MaxScroll() const;
